@@ -22,6 +22,8 @@ export interface ModuleMetadata {
   description?: string; // 模块描述
   author?: string; // 作者信息
   dependencies?: string[]; // 依赖的其他模块ID
+  implements?: string; // 该模块实现的接口ID（用于接口与实现分离）
+  isInterface?: boolean; // 标记该模块是否为接口定义
 }
 
 /**

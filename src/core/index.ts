@@ -9,7 +9,12 @@ export { Kernel, KernelOptions, KernelEventType } from './kernel';
 export { BaseModule } from './module-base';
 
 // 导出模块注册中心
-export { ModuleRegistryImpl } from './module-registry';
+export {
+  ModuleRegistryImpl,
+  ModuleHotReplaceOptions,
+  DependencyNode,
+  ModuleDependencyGraph
+} from './module-registry';
 
 // 导出事件总线
 export { EventBusImpl } from './event-bus';

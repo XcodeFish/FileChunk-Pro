@@ -9,6 +9,54 @@ import {
 } from '../types/modules';
 
 /**
+ * 模块热替换选项
+ */
+export interface ModuleHotReplaceOptions {
+  /**
+   * 是否保留状态
+   * 如果为true，将尝试在新模块中恢复旧模块的内部状态
+   */
+  keepState?: boolean;
+
+  /**
+   * 是否自动初始化
+   */
+  autoInit?: boolean;
+
+  /**
+   * 是否自动启动
+   */
+  autoStart?: boolean;
+
+  /**
+   * 替换后触发的回调函数
+   */
+  onReplaced?: (oldModule: Module, newModule: Module) => void;
+}
+
+/**
+ * 依赖图节点
+ */
+export interface DependencyNode {
+  id: string;
+  name: string;
+  dependencies: string[];
+  dependents: string[];
+  status: ModuleStatus;
+}
+
+/**
+ * 模块依赖图
+ */
+export interface ModuleDependencyGraph {
+  nodes: DependencyNode[];
+  edges: Array<{
+    source: string;
+    target: string;
+  }>;
+}
+
+/**
  * 默认模块注册选项
  */
 const DEFAULT_REGISTRATION_OPTIONS: ModuleRegistrationOptions = {
@@ -35,6 +83,12 @@ export class ModuleRegistryImpl implements ModuleRegistry {
    * key: 模块ID, value: 依赖该模块的其他模块ID数组
    */
   private _dependencyGraph: Map<string, string[]> = new Map();
+
+  /**
+   * 接口实现映射表 - 存储接口ID到具体实现模块ID的映射
+   * key: 接口模块ID, value: 实现模块ID
+   */
+  private _interfaceImplementations: Map<string, string> = new Map();
 
   /**
    * 注册模块
@@ -84,6 +138,11 @@ export class ModuleRegistryImpl implements ModuleRegistry {
     // 更新依赖图
     this.updateDependencyGraph(module);
 
+    // 注册接口实现关系（如果有提供）
+    if (module.metadata.implements) {
+      this.registerInterfaceImplementation(moduleId, module.metadata.implements);
+    }
+
     // 根据选项决定是否自动初始化和启动模块
     const initializeAndStart = async (): Promise<void> => {
       if (mergedOptions.autoInit) {
@@ -130,6 +189,13 @@ export class ModuleRegistryImpl implements ModuleRegistry {
       );
     }
 
+    // 移除接口实现映射
+    for (const [interfaceId, implId] of this._interfaceImplementations.entries()) {
+      if (implId === moduleId) {
+        this._interfaceImplementations.delete(interfaceId);
+      }
+    }
+
     // 从依赖图中移除
     this._dependencyGraph.delete(moduleId);
 
@@ -152,8 +218,134 @@ export class ModuleRegistryImpl implements ModuleRegistry {
    * @returns 模块实例，如果未找到则返回undefined
    */
   get<T extends Module>(moduleId: string): T | undefined {
+    // 如果是接口ID，返回其实现
+    if (this._interfaceImplementations.has(moduleId)) {
+      const implementationId = this._interfaceImplementations.get(moduleId);
+      if (implementationId) {
+        const registration = this._modules.get(implementationId);
+        return registration ? (registration.module as T) : undefined;
+      }
+    }
+
+    // 否则直接返回模块
     const registration = this._modules.get(moduleId);
     return registration ? (registration.module as T) : undefined;
+  }
+
+  /**
+   * 热替换模块
+   *
+   * @param moduleId - 要替换的模块ID
+   * @param newModule - 新的模块实例
+   * @param options - 热替换选项
+   * @returns 是否替换成功
+   * @throws {ModuleRegistrationError} 当替换失败时抛出
+   */
+  hotReplaceModule(
+    moduleId: string,
+    newModule: Module,
+    options: ModuleHotReplaceOptions = {}
+  ): boolean {
+    if (!this._modules.has(moduleId)) {
+      throw new ModuleRegistrationError(`无法替换不存在的模块: ${moduleId}`, moduleId);
+    }
+
+    const oldRegistration = this._modules.get(moduleId)!;
+    const oldModule = oldRegistration.module;
+
+    // 检查两个模块的兼容性
+    if (oldModule.metadata.id !== newModule.metadata.id) {
+      throw new ModuleRegistrationError(
+        `模块ID不匹配: ${oldModule.metadata.id} vs ${newModule.metadata.id}`,
+        moduleId
+      );
+    }
+
+    // 验证新模块的依赖
+    this.validateDependencies(newModule);
+
+    // 如果旧模块正在运行，先停止它
+    if (oldModule.status === ModuleStatus.RUNNING) {
+      try {
+        oldModule.stop();
+      } catch (error) {
+        console.error(`停止模块 ${moduleId} 失败:`, error);
+      }
+    }
+
+    // 创建新的注册信息
+    const newRegistration: ModuleRegistration = {
+      module: newModule,
+      options: oldRegistration.options,
+      registeredAt: Date.now()
+    };
+
+    // 更新注册表
+    this._modules.set(moduleId, newRegistration);
+
+    // 更新依赖图
+    this.updateDependencyGraph(newModule);
+
+    // 更新接口实现映射
+    if (newModule.metadata.implements) {
+      this.registerInterfaceImplementation(moduleId, newModule.metadata.implements);
+    }
+
+    // 根据选项决定是否自动初始化和启动
+    const initializeAndStart = async (): Promise<void> => {
+      if (options.autoInit) {
+        await this.initializeModule(newModule, oldRegistration.options.initTimeout);
+
+        if (options.autoStart) {
+          await this.startModule(newModule, oldRegistration.options.startTimeout);
+        }
+      }
+    };
+
+    if (options.autoInit) {
+      initializeAndStart().catch(error => {
+        console.error(`模块 ${moduleId} 热替换后初始化或启动失败:`, error);
+      });
+    }
+
+    // 触发回调
+    if (options.onReplaced) {
+      try {
+        options.onReplaced(oldModule, newModule);
+      } catch (error) {
+        console.error(`模块 ${moduleId} 热替换回调执行失败:`, error);
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * 注册接口实现关系
+   *
+   * @param implementationId - 实现模块的ID
+   * @param interfaceId - 接口模块的ID
+   */
+  registerInterfaceImplementation(implementationId: string, interfaceId: string): void {
+    if (!this._modules.has(implementationId)) {
+      throw new ModuleRegistrationError(`实现模块 ${implementationId} 未注册`, implementationId);
+    }
+
+    this._interfaceImplementations.set(interfaceId, implementationId);
+  }
+
+  /**
+   * 获取接口的具体实现模块
+   *
+   * @param interfaceId - 接口模块的ID
+   * @returns 实现该接口的模块，如果未找到则返回undefined
+   */
+  getImplementation<T extends Module>(interfaceId: string): T | undefined {
+    const implementationId = this._interfaceImplementations.get(interfaceId);
+    if (!implementationId) {
+      return undefined;
+    }
+    return this.get<T>(implementationId);
   }
 
   /**
@@ -163,7 +355,7 @@ export class ModuleRegistryImpl implements ModuleRegistry {
    * @returns 是否已注册
    */
   has(moduleId: string): boolean {
-    return this._modules.has(moduleId);
+    return this._modules.has(moduleId) || this._interfaceImplementations.has(moduleId);
   }
 
   /**
@@ -223,6 +415,128 @@ export class ModuleRegistryImpl implements ModuleRegistry {
   clear(): void {
     this._modules.clear();
     this._dependencyGraph.clear();
+    this._interfaceImplementations.clear();
+  }
+
+  /**
+   * 生成模块依赖图
+   *
+   * @returns 包含节点和边的依赖图结构
+   */
+  generateDependencyGraph(): ModuleDependencyGraph {
+    const nodes: DependencyNode[] = [];
+    const edges: Array<{ source: string; target: string }> = [];
+
+    // 为每个模块创建节点
+    for (const registration of this._modules.values()) {
+      const module = registration.module;
+      const dependencies = module.metadata.dependencies || [];
+      const dependents = this._dependencyGraph.get(module.metadata.id) || [];
+
+      nodes.push({
+        id: module.metadata.id,
+        name: module.metadata.name,
+        dependencies,
+        dependents,
+        status: module.status
+      });
+
+      // 为每个依赖关系创建边
+      for (const depId of dependencies) {
+        edges.push({
+          source: module.metadata.id,
+          target: depId
+        });
+      }
+    }
+
+    return { nodes, edges };
+  }
+
+  /**
+   * 排序模块按照依赖顺序
+   *
+   * @returns 按依赖顺序排序的模块数组
+   */
+  getSortedModules(): Module[] {
+    const modules = this.getAllModules();
+
+    // 使用拓扑排序获取正确的依赖顺序
+    return this.topologicalSort(modules);
+  }
+
+  /**
+   * 执行拓扑排序
+   *
+   * @param modules - 要排序的模块数组
+   * @returns 排序后的模块数组
+   */
+  private topologicalSort(modules: Module[]): Module[] {
+    const result: Module[] = [];
+    const visited = new Set<string>();
+    const temp = new Set<string>();
+
+    // 创建模块ID到模块实例的映射
+    const moduleMap = new Map<string, Module>();
+    modules.forEach(module => {
+      moduleMap.set(module.metadata.id, module);
+    });
+
+    // 对每个未访问的节点执行DFS
+    modules.forEach(module => {
+      if (!visited.has(module.metadata.id)) {
+        this.dfsTopologicalSort(module, visited, temp, result, moduleMap);
+      }
+    });
+
+    // 结果是逆序的，需要反转
+    return result.reverse();
+  }
+
+  /**
+   * 深度优先搜索实现拓扑排序
+   *
+   * @param module - 当前模块
+   * @param visited - 已访问节点集合
+   * @param temp - 临时标记集合（用于检测环）
+   * @param result - 排序结果
+   * @param moduleMap - 模块ID到模块实例的映射
+   */
+  private dfsTopologicalSort(
+    module: Module,
+    visited: Set<string>,
+    temp: Set<string>,
+    result: Module[],
+    moduleMap: Map<string, Module>
+  ): void {
+    const moduleId = module.metadata.id;
+
+    // 检测循环依赖
+    if (temp.has(moduleId)) {
+      throw new ModuleDependencyError(`检测到循环依赖，涉及模块: ${moduleId}`, moduleId, '');
+    }
+
+    // 如果已访问，跳过
+    if (visited.has(moduleId)) {
+      return;
+    }
+
+    // 标记为临时访问
+    temp.add(moduleId);
+
+    // 访问所有依赖项
+    const dependencies = module.metadata.dependencies || [];
+    for (const depId of dependencies) {
+      const depModule = moduleMap.get(depId);
+      if (depModule) {
+        this.dfsTopologicalSort(depModule, visited, temp, result, moduleMap);
+      }
+    }
+
+    // 标记为已访问并添加到结果
+    temp.delete(moduleId);
+    visited.add(moduleId);
+    result.push(module);
   }
 
   /**
@@ -241,7 +555,7 @@ export class ModuleRegistryImpl implements ModuleRegistry {
       }
 
       // 检查依赖的模块是否已注册
-      if (!this._modules.has(depId)) {
+      if (!this.has(depId)) {
         throw new ModuleDependencyError(
           `模块 ${moduleId} 依赖未注册的模块: ${depId}`,
           moduleId,

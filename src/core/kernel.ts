@@ -6,7 +6,11 @@ import {
   ModuleLifecycleError
 } from '../types/modules';
 import { BaseModule } from './module-base';
-import { ModuleRegistryImpl } from './module-registry';
+import {
+  ModuleRegistryImpl,
+  ModuleHotReplaceOptions,
+  ModuleDependencyGraph
+} from './module-registry';
 import { EventBusImpl } from './event-bus';
 import {
   EventBus,
@@ -56,7 +60,11 @@ export enum KernelEventType {
   CONFIG_RESET = 'kernel:config:reset',
 
   // 状态相关事件
-  KERNEL_STATE_CHANGED = 'kernel:state:changed'
+  KERNEL_STATE_CHANGED = 'kernel:state:changed',
+
+  // 热替换相关事件
+  MODULE_REPLACE = 'kernel:module:replace',
+  MODULE_REPLACE_COMPLETE = 'kernel:module:replace:complete'
 }
 
 /**
@@ -1395,5 +1403,87 @@ export class Kernel {
         }
       }
     }
+  }
+
+  /**
+   * 热替换模块
+   *
+   * @param moduleId - 要替换的模块ID
+   * @param newModule - 新的模块实例
+   * @param options - 热替换选项
+   * @returns 内核实例，支持链式调用
+   */
+  hotReplaceModule(
+    moduleId: string,
+    newModule: Module,
+    options: ModuleHotReplaceOptions = {}
+  ): Kernel {
+    this._logDebug(`开始热替换模块: ${moduleId}`);
+
+    this.emit(KernelEventType.MODULE_REPLACE, {
+      moduleId,
+      oldModule: this._registry.get(moduleId),
+      newModule
+    });
+
+    // 不保存结果，直接调用方法
+    this._registry.hotReplaceModule(moduleId, newModule, {
+      ...options,
+      onReplaced: (oldModule, newModule) => {
+        this.emit(KernelEventType.MODULE_REPLACE_COMPLETE, {
+          moduleId,
+          oldModule,
+          newModule,
+          success: true
+        });
+
+        // 调用用户提供的回调
+        if (options.onReplaced) {
+          options.onReplaced(oldModule, newModule);
+        }
+      }
+    });
+
+    return this;
+  }
+
+  /**
+   * 获取模块接口的实现
+   *
+   * @param interfaceId - 接口模块ID
+   * @returns 实现该接口的模块实例
+   */
+  getImplementation<T extends Module>(interfaceId: string): T | undefined {
+    return this._registry.getImplementation<T>(interfaceId);
+  }
+
+  /**
+   * 注册接口实现关系
+   *
+   * @param implementationId - 实现模块ID
+   * @param interfaceId - 接口模块ID
+   * @returns 内核实例，支持链式调用
+   */
+  registerInterfaceImplementation(implementationId: string, interfaceId: string): Kernel {
+    this._registry.registerInterfaceImplementation(implementationId, interfaceId);
+    return this;
+  }
+
+  /**
+   * 生成模块依赖图，用于可视化或分析
+   *
+   * @returns 包含节点和边的依赖图结构
+   */
+  generateModuleDependencyGraph(): ModuleDependencyGraph {
+    return this._registry.generateDependencyGraph();
+  }
+
+  /**
+   * 获取按依赖顺序排序的模块列表
+   *
+   * @returns 排序后的模块数组
+   */
+  getSortedModules(): Module[] {
+    return this._registry.getSortedModules();
   }
 }

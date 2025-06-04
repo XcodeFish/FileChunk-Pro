@@ -7,6 +7,155 @@
 
 我将设计一个创新的通用前端大文件上传工具，支持React、Vue、原生JS和小程序环境，采用微内核架构实现跨平台兼容与高性能上传。
 
+## 目录结构设计
+
+```text
+filechunk-pro/
+├── src/                         # 源代码
+│   ├── core/                    # 微内核核心
+│   │   ├── kernel.ts            # 微内核主类
+│   │   ├── module-base.ts       # 模块基类
+│   │   ├── event-bus.ts         # 事件系统
+│   │   └── module-registry.ts   # 模块注册中心
+│   │
+│   ├── modules/                 # 功能模块
+│   │   ├── transport/           # 传输模块
+│   │   │   ├── http-transport.ts
+│   │   │   ├── chunk-strategy.ts
+│   │   │   ├── concurrency-manager.ts
+│   │   │   └── chunk-iterator.ts
+│   │   │
+│   │   ├── storage/             # 存储模块
+│   │   │   ├── storage-engine.ts
+│   │   │   ├── indexeddb-storage.ts
+│   │   │   └── miniapp-storage.ts
+│   │   │
+│   │   ├── security/            # 安全模块
+│   │   │   ├── security-manager.ts
+│   │   │   ├── crypto-helper.ts
+│   │   │   ├── integrity-checker.ts
+│   │   │   └── security-defense.ts
+│   │   │
+│   │   ├── compression/         # 压缩模块
+│   │   │   ├── compression-manager.ts
+│   │   │   └── compression-strategies.ts
+│   │   │
+│   │   ├── network/             # 网络模块
+│   │   │   ├── edge-network-manager.ts
+│   │   │   └── cdn-connector.ts
+│   │   │
+│   │   ├── error/               # 错误处理模块
+│   │   │   ├── error-handler.ts
+│   │   │   ├── retry-strategies.ts
+│   │   │   └── error-reporter.ts
+│   │   │
+│   │   ├── queue/               # 队列管理模块
+│   │   │   ├── upload-queue-manager.ts
+│   │   │   └── persistent-queue.ts
+│   │   │
+│   │   └── inspector/           # 文件检测模块
+│   │       ├── pre-upload-inspector.ts
+│   │       ├── mime-detector.ts
+│   │       └── content-scanner.ts
+│   │
+│   ├── platforms/               # 平台适配层
+│   │   ├── platform-base.ts     # 平台基类
+│   │   ├── browser/             # 浏览器适配
+│   │   │   ├── browser-adapter.ts
+│   │   │   └── browser-features.ts
+│   │   │
+│   │   ├── miniapp/             # 小程序适配
+│   │   │   ├── wechat-adapter.ts
+│   │   │   ├── alipay-adapter.ts
+│   │   │   └── miniapp-utils.ts
+│   │   │
+│   │   └── native/              # 原生平台适配
+│   │       ├── react-native-adapter.ts
+│   │       └── flutter-adapter.ts
+│   │
+│   ├── workers/                 # Web Worker
+│   │   ├── hash-worker.ts
+│   │   └── worker-manager.ts
+│   │
+│   ├── reactive/                # 响应式支持
+│   │   ├── reactive-uploader.ts
+│   │   ├── observable.ts
+│   │   └── hooks/
+│   │       ├── react-hooks.ts
+│   │       └── vue-composables.ts
+│   │
+│   ├── utils/                   # 通用工具
+│   │   ├── byte-utils.ts
+│   │   ├── hash-utils.ts
+│   │   ├── logger.ts
+│   │   └── network-utils.ts
+│   │
+│   └── types/                   # 类型定义
+│       ├── index.ts
+│       ├── events.ts
+│       ├── modules.ts
+│       └── config.ts
+│
+├── dist/                        # 编译输出目录
+│   ├── umd/                     # UMD格式
+│   │   ├── filechunk-pro.js
+│   │   └── filechunk-pro.min.js
+│   │
+│   ├── esm/                     # ES模块格式
+│   │   ├── index.js
+│   │   ├── core/
+│   │   ├── modules/
+│   │   └── ...
+│   │
+│   ├── cjs/                     # CommonJS格式
+│   │   └── ...
+│   │
+│   └── types/                   # TypeScript类型定义
+│
+├── plugins/                     # 官方插件
+│   ├── encryption/
+│   ├── validation/
+│   └── cdn-integration/
+│
+├── packages/                    # 不同平台专用包
+│   ├── miniapp/                 # 小程序专用
+│   │   ├── wechat/
+│   │   └── alipay/
+│   │
+│   ├── react/                   # React集成
+│   │
+│   └── vue/                     # Vue集成
+│
+├── examples/                    # 示例代码
+│   ├── browser/
+│   ├── react/
+│   ├── vue/
+│   └── miniapp/
+│
+├── tests/                       # 测试文件
+│   ├── unit/
+│   ├── integration/
+│   └── e2e/
+│
+├── docs/                        # 文档
+│
+├── scripts/                     # 构建脚本
+│   ├── build.js
+│   ├── release.js
+│   └── generate-api-docs.js
+│
+├── .github/                     # GitHub配置
+│   └── workflows/               # CI/CD工作流
+│
+├── tsconfig.json                # TypeScript配置
+├── package.json                 # 包配置
+├── rollup.config.js             # 打包配置
+├── jest.config.js               # 测试配置
+├── .eslintrc.js                 # 代码规范配置
+├── README.md                    # 项目说明
+└── LICENSE                      # 许可证
+```
+
 ## 二、架构设计
 
 ```mermaid
@@ -2065,53 +2214,1338 @@ class EdgeNetworkManager {
 }
 ```
 
-## 十二、打包结构
+## 十二、错误处理与重试机制
 
-```text
-filechunk-pro
-├── dist/
-├── filechunk-pro.ts        // UMD打包 (35KB)
-├── filechunk-pro.min.ts    // UMD压缩版 (18KB)
-├── esm/                    // ES模块
-│   ├── core/               // 微内核
-│   │   ├── kernel.ts
-│   │   └── module-manager.ts
-│   ├── modules/            // 功能模块
-│   │   ├── transport.ts
-│   │   ├── storage.ts
-│   │   ├── security.ts
-│   │   └── compression.ts
-│   ├── adapters/           // 平台适配器
-│   │   ├── browser.ts
-│   │   ├── wechat.ts
-│   │   ├── alipay.ts
-│   │   ├── taro.ts
-│   │   └── uniapp.ts
-│   └── reactive/           // 响应式API
-│       ├── reactive-uploader.ts
-│       └── hooks/
-│           ├── react.ts
-│           └── vue.ts
-│   └── types/              // 类型定义
-│       └── index.ts
-├── miniapp/                // 小程序专用包
-│   ├── wechat.ts           // 微信小程序
-│   ├── alipay.ts           // 支付宝小程序
-│   └── taro.ts             // Taro适配
-├── plugins/                // 官方插件
-│   ├── encryption.ts
-│   ├── validation.ts
-│   └── cdn-integration.ts
-└── workers/                // Web Worker
-    └── hash-worker.ts
-├── tests/                  // 测试文件
-├── examples/               // 示例代码
-├── docs/                   // 文档
-├── scripts/                // 构建脚本
-└── package.json
+```javascript
+class ErrorHandler {
+  constructor(options = {}) {
+    this.options = {
+      maxRetries: 3,
+      initialRetryDelay: 1000,
+      maxRetryDelay: 30000,
+      retryBackoffFactor: 2,
+      jitter: 0.2, // 抖动因子，避免瞬时峰值
+      retryableStatusCodes: [408, 429, 500, 502, 503, 504],
+      errorReportingEnabled: true,
+      errorReportingEndpoint: '/api/error-report',
+      ...options
+    };
+
+    // 错误统计
+    this.errorStats = {
+      networkErrors: 0,
+      serverErrors: 0,
+      clientErrors: 0,
+      timeoutErrors: 0,
+      unknownErrors: 0,
+      totalRetries: 0,
+      successAfterRetry: 0
+    };
+  }
+
+  init(kernel) {
+    this.kernel = kernel;
+  }
+
+  // 细粒度错误分类
+  categorizeError(error) {
+    if (!error) return { type: 'unknown', retryable: false };
+
+    // 网络错误
+    if (
+      error.name === 'NetworkError' ||
+      error.message.includes('network') ||
+      error.message.includes('internet') ||
+      error.message.includes('connection') ||
+      error.message.includes('offline') ||
+      error.message.includes('unreachable')
+    ) {
+      this.errorStats.networkErrors++;
+      return { type: 'network', retryable: true };
+    }
+
+    // 超时错误
+    if (
+      error.name === 'TimeoutError' ||
+      error.message.includes('timeout') ||
+      error.message.includes('timed out')
+    ) {
+      this.errorStats.timeoutErrors++;
+      return { type: 'timeout', retryable: true };
+    }
+
+    // HTTP状态错误
+    if (error.status || error.statusCode) {
+      const status = error.status || error.statusCode;
+
+      // 服务器错误 (5xx)
+      if (status >= 500) {
+        this.errorStats.serverErrors++;
+        return {
+          type: 'server',
+          retryable: this.options.retryableStatusCodes.includes(status)
+        };
+      }
+
+      // 客户端错误 (4xx)
+      if (status >= 400) {
+        this.errorStats.clientErrors++;
+        // 只有特定的客户端错误才可重试（如429太多请求）
+        return {
+          type: 'client',
+          retryable: this.options.retryableStatusCodes.includes(status)
+        };
+      }
+    }
+
+    // 未知错误
+    this.errorStats.unknownErrors++;
+    return { type: 'unknown', retryable: false };
+  }
+
+  // 指数退避重试策略
+  async retryWithExponentialBackoff(fn, maxRetries = this.options.maxRetries) {
+    let retryCount = 0;
+
+    while (true) {
+      try {
+        return await fn();
+      } catch (error) {
+        const { type, retryable } = this.categorizeError(error);
+
+        // 错误上报
+        if (this.options.errorReportingEnabled) {
+          this.reportError(error, { type, retryCount });
+        }
+
+        // 不可重试的错误直接抛出
+        if (!retryable) {
+          throw error;
+        }
+
+        retryCount++;
+        this.errorStats.totalRetries++;
+
+        // 超出最大重试次数
+        if (retryCount >= maxRetries) {
+          // 使用原始错误再包装一层，包含重试信息
+          const enhancedError = new Error(`上传失败，已重试${retryCount}次: ${error.message}`);
+          enhancedError.originalError = error;
+          enhancedError.retries = retryCount;
+          throw enhancedError;
+        }
+
+        // 计算延迟时间（指数退避 + 随机抖动）
+        const delay = this.calculateBackoff(retryCount);
+
+        // 触发重试事件
+        this.kernel.emit('retry', {
+          error,
+          retryCount,
+          delay,
+          errorType: type
+        });
+
+        // 等待后重试
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  // 计算退避时间
+  calculateBackoff(retryCount) {
+    // 基础退避时间 = 初始延迟 * (退避因子 ^ 重试次数)
+    const baseDelay = this.options.initialRetryDelay *
+                     Math.pow(this.options.retryBackoffFactor, retryCount);
+
+    // 添加抖动，避免雪崩
+    const jitterFactor = 1 - this.options.jitter +
+                        (Math.random() * this.options.jitter * 2);
+
+    // 最终延迟 = 基础延迟 * 抖动因子，但不超过最大延迟
+    return Math.min(baseDelay * jitterFactor, this.options.maxRetryDelay);
+  }
+
+  // 错误上报系统
+  async reportError(error, context = {}) {
+    try {
+      // 如果没有设置端点，跳过上报
+      if (!this.options.errorReportingEndpoint) return;
+
+      // 准备上报数据
+      const report = {
+        timestamp: Date.now(),
+        error: {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        },
+        context: {
+          ...context,
+          userAgent: navigator.userAgent,
+          url: window.location.href
+        },
+        stats: this.errorStats
+      };
+
+      // 发送错误报告
+      await fetch(this.options.errorReportingEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(report),
+        // 使用keepalive确保报告即使在页面卸载时也能发送
+        keepalive: true
+      });
+    } catch (reportError) {
+      // 上报过程本身的错误不应影响主流程
+      console.warn('错误上报失败:', reportError);
+    }
+  }
+
+  // 处理特定上传错误
+  handleUploadError(error, chunk, fileHash) {
+    const { type } = this.categorizeError(error);
+
+    // 基于错误类型执行不同操作
+    switch (type) {
+      case 'network':
+        // 网络错误：可能需要检查连接状态
+        this.kernel.emit('networkError', { error, chunk });
+        break;
+
+      case 'timeout':
+        // 超时错误：可能需要调整分片大小
+        this.kernel.emit('timeoutError', { error, chunk });
+        break;
+
+      case 'server':
+        // 服务器错误：可能需要切换到备用服务器
+        this.kernel.emit('serverError', { error, chunk });
+        break;
+
+      case 'client':
+        // 客户端错误：可能是认证问题或请求无效
+        this.kernel.emit('clientError', { error, chunk });
+        break;
+    }
+
+    // 记录出错的分片信息，用于断点续传
+    return this.recordFailedChunk(chunk, fileHash);
+  }
+
+  // 记录失败的分片
+  async recordFailedChunk(chunk, fileHash) {
+    try {
+      const storage = this.kernel.getModule('storage');
+
+      // 获取已有的失败记录
+      const failedChunksKey = `failed_chunks_${fileHash}`;
+      let failedChunks = await storage.get(failedChunksKey) || [];
+
+      // 添加新的失败记录
+      failedChunks.push({
+        index: chunk.index,
+        timestamp: Date.now(),
+        retries: 0
+      });
+
+      // 保存更新后的记录
+      await storage.save(failedChunksKey, failedChunks);
+
+      return failedChunks;
+    } catch (error) {
+      console.warn('记录失败分片错误:', error);
+      return [];
+    }
+  }
+
+  // 获取错误统计
+  getErrorStats() {
+    return { ...this.errorStats };
+  }
+
+  // 重置统计
+  resetStats() {
+    Object.keys(this.errorStats).forEach(key => {
+      this.errorStats[key] = 0;
+    });
+  }
+}
+
+// 扩展HttpTransport以使用高级错误处理
+class EnhancedHttpTransport extends HttpTransport {
+  constructor(options) {
+    super(options);
+
+    // 添加错误处理器
+    this.errorHandler = new ErrorHandler(options.errorHandling || {});
+  }
+
+  init(kernel) {
+    super.init(kernel);
+    this.errorHandler.init(kernel);
+  }
+
+  // 重写上传分片方法使用高级重试
+  async uploadChunk(chunk, hash, totalChunks, platform, signal) {
+    return this.errorHandler.retryWithExponentialBackoff(async () => {
+      // 标记重试开始
+      const retryStartTime = Date.now();
+
+      try {
+        // 调用原始上传方法
+        const result = await super.uploadChunk(chunk, hash, totalChunks, platform, signal);
+
+        // 如果成功且是重试，记录成功
+        if (retryStartTime > 0) {
+          this.errorHandler.errorStats.successAfterRetry++;
+        }
+
+        return result;
+      } catch (error) {
+        // 处理特定上传错误并记录
+        this.errorHandler.handleUploadError(error, chunk, hash);
+        throw error; // 重新抛出以触发重试
+      }
+    }, this.options.maxRetries || 3);
+  }
+
+  // 重写合并请求以使用错误处理
+  async mergeChunks(hash, totalChunks, fileName) {
+    return this.errorHandler.retryWithExponentialBackoff(async () => {
+      try {
+        return await super.mergeChunks(hash, totalChunks, fileName);
+      } catch (error) {
+        // 特殊处理合并错误
+        const { type } = this.errorHandler.categorizeError(error);
+        this.kernel.emit('mergeError', { error, type, hash, fileName });
+        throw error; // 重新抛出以触发重试
+      }
+    }, 2); // 合并请求通常只需较少重试次数
+  }
+}
+
+// 使用示例
+const uploader = new FileChunkKernel()
+  .registerModule('transport', new EnhancedHttpTransport({
+    target: '/api/upload',
+    chunkSize: 5 * 1024 * 1024,
+    concurrency: 3,
+    errorHandling: {
+      maxRetries: 5,
+      retryBackoffFactor: 1.5,
+      errorReportingEnabled: true
+    }
+  }))
+  .registerModule('platform', new BrowserAdapter());
+
+// 监听重试事件
+uploader.on('retry', (data) => {
+  console.log(`重试上传: 第${data.retryCount}次, 延迟${data.delay}ms, 错误类型: ${data.errorType}`);
+});
+
+// 监听特定错误类型
+uploader.on('networkError', (data) => {
+  console.warn('网络错误:', data.error.message);
+  // 可以在这里显示网络连接提示
+});
 ```
 
-## 十三、性能比较
+## 十三、离线支持与队列管理
+
+```javascript
+class UploadQueueManager {
+  constructor(options = {}) {
+    this.options = {
+      maxQueueSize: 100,  // 队列最大长度
+      persistQueue: true, // 是否持久化队列
+      autoResume: true,   // 网络恢复时自动继续
+      queueKey: 'filechunk_upload_queue',
+      processingKey: 'filechunk_processing',
+      ...options
+    };
+
+    // 上传队列
+    this.queue = [];
+
+    // 当前正在处理的项目
+    this.processing = null;
+
+    // 队列状态
+    this.state = {
+      status: 'idle', // idle, processing, paused, stopped
+      isOnline: navigator?.onLine !== false,
+      processingItem: null,
+      activeUploads: 0,
+      totalQueued: 0
+    };
+
+    // 事件监听器
+    this.listeners = new Map();
+  }
+
+  async init(kernel) {
+    this.kernel = kernel;
+
+    // 获取存储模块
+    this.storage = kernel.getModule('storage');
+
+    // 初始化网络监听
+    this.setupNetworkListeners();
+
+    // 恢复持久化的队列
+    if (this.options.persistQueue) {
+      await this.restoreQueue();
+    }
+  }
+
+  // 添加到上传队列
+  async addToQueue(file, metadata = {}) {
+    // 生成队列项唯一ID
+    const queueId = `upload_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+    // 创建队列项
+    const queueItem = {
+      id: queueId,
+      file,
+      metadata: {
+        ...metadata,
+        addedAt: Date.now(),
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type
+      },
+      status: 'queued',
+      progress: 0,
+      error: null,
+      retries: 0,
+      result: null
+    };
+
+    // 队列长度检查
+    if (this.queue.length >= this.options.maxQueueSize) {
+      throw new Error(`上传队列已满 (最大${this.options.maxQueueSize}项)`);
+    }
+
+    // 添加到队列
+    this.queue.push(queueItem);
+    this.state.totalQueued = this.queue.length;
+
+    // 持久化队列
+    if (this.options.persistQueue) {
+      await this.persistQueue();
+    }
+
+    // 触发事件
+    this.emitEvent('queueUpdated', this.getQueueState());
+
+    // 如果是空闲状态且在线，开始处理队列
+    if (this.state.status === 'idle' && this.state.isOnline) {
+      this.processQueue();
+    }
+
+    return queueId;
+  }
+
+  // 批量添加到队列
+  async addBulkToQueue(files, commonMetadata = {}) {
+    const queueIds = [];
+
+    for (const file of files) {
+      // 为每个文件添加特定元数据
+      const metadata = {
+        ...commonMetadata,
+        bulkUpload: true,
+        bulkSize: files.length
+      };
+
+      try {
+        const id = await this.addToQueue(file, metadata);
+        queueIds.push(id);
+      } catch (error) {
+        // 继续添加其他文件，但记录错误
+        console.error('添加文件到队列失败:', error);
+      }
+    }
+
+    return queueIds;
+  }
+
+  // 处理上传队列
+  async processQueue() {
+    // 如果不在线、已暂停或正在处理，直接返回
+    if (
+      !this.state.isOnline ||
+      this.state.status === 'paused' ||
+      this.state.status === 'processing'
+    ) {
+      return;
+    }
+
+    // 标记为处理中
+    this.state.status = 'processing';
+    this.emitEvent('statusChanged', this.state.status);
+
+    // 获取队列中的下一个项目
+    const nextItem = this.queue.find(item => item.status === 'queued');
+
+    if (!nextItem) {
+      // 队列为空，标记为空闲
+      this.state.status = 'idle';
+      this.emitEvent('statusChanged', this.state.status);
+      this.emitEvent('queueEmpty');
+      return;
+    }
+
+    // 更新状态
+    nextItem.status = 'processing';
+    this.processing = nextItem;
+    this.state.processingItem = nextItem.id;
+    this.state.activeUploads++;
+
+    // 持久化当前处理状态
+    if (this.options.persistQueue) {
+      await this.storage.save(this.options.processingKey, nextItem);
+      await this.persistQueue();
+    }
+
+    // 触发事件
+    this.emitEvent('uploadStarted', nextItem);
+
+    try {
+      // 使用传输模块上传文件
+      const transport = this.kernel.getModule('transport');
+      const platform = this.kernel.getModule('platform');
+
+      // 注册进度回调
+      const progressHandler = (progress) => {
+        nextItem.progress = progress;
+        this.emitEvent('uploadProgress', { id: nextItem.id, progress });
+      };
+
+      this.kernel.on('progress', progressHandler);
+
+      // 执行上传
+      const result = await transport.start(nextItem.file, platform);
+
+      // 更新队列项
+      nextItem.status = 'completed';
+      nextItem.progress = 100;
+      nextItem.result = result;
+
+      // 从队列中移除
+      this.queue = this.queue.filter(item => item.id !== nextItem.id);
+      this.state.totalQueued = this.queue.length;
+
+      // 清除正在处理项
+      this.processing = null;
+      this.state.processingItem = null;
+      this.state.activeUploads--;
+
+      // 持久化队列
+      if (this.options.persistQueue) {
+        await this.storage.remove(this.options.processingKey);
+        await this.persistQueue();
+      }
+
+      // 触发事件
+      this.emitEvent('uploadCompleted', { id: nextItem.id, result });
+      this.emitEvent('queueUpdated', this.getQueueState());
+
+      // 移除进度监听器
+      this.kernel.off('progress', progressHandler);
+
+      // 继续处理队列
+      this.processQueue();
+    } catch (error) {
+      // 上传失败
+      nextItem.status = 'failed';
+      nextItem.error = {
+        message: error.message,
+        code: error.code || 'UPLOAD_ERROR',
+        timestamp: Date.now()
+      };
+      nextItem.retries++;
+
+      // 清除正在处理项
+      this.processing = null;
+      this.state.processingItem = null;
+      this.state.activeUploads--;
+
+      // 持久化队列
+      if (this.options.persistQueue) {
+        await this.storage.remove(this.options.processingKey);
+        await this.persistQueue();
+      }
+
+      // 触发事件
+      this.emitEvent('uploadFailed', { id: nextItem.id, error });
+      this.emitEvent('queueUpdated', this.getQueueState());
+
+      // 继续处理队列
+      this.processQueue();
+    }
+  }
+
+  // 暂停队列处理
+  async pauseQueue() {
+    // 如果当前不是处理中状态，直接返回
+    if (this.state.status !== 'processing') {
+      return;
+    }
+
+    // 标记为暂停
+    this.state.status = 'paused';
+
+    // 如果有正在处理的项目，暂停它
+    if (this.processing) {
+      const transport = this.kernel.getModule('transport');
+      transport.pause();
+
+      // 更新状态
+      this.processing.status = 'paused';
+
+      // 持久化
+      if (this.options.persistQueue) {
+        await this.persistQueue();
+      }
+    }
+
+    // 触发事件
+    this.emitEvent('statusChanged', this.state.status);
+    this.emitEvent('queuePaused');
+  }
+
+  // 恢复队列处理
+  async resumeQueue() {
+    // 如果当前不是暂停状态，直接返回
+    if (this.state.status !== 'paused') {
+      return;
+    }
+
+    // 标记为处理中
+    this.state.status = 'processing';
+
+    // 如果有暂停的处理项，恢复它
+    if (this.processing) {
+      const transport = this.kernel.getModule('transport');
+      transport.resume();
+
+      // 更新状态
+      this.processing.status = 'processing';
+
+      // 持久化
+      if (this.options.persistQueue) {
+        await this.persistQueue();
+      }
+    } else {
+      // 没有正在处理的项目，开始处理队列
+      this.processQueue();
+    }
+
+    // 触发事件
+    this.emitEvent('statusChanged', this.state.status);
+    this.emitEvent('queueResumed');
+  }
+
+  // 取消单个上传
+  async cancelUpload(id) {
+    // 查找队列项
+    const queueItem = this.queue.find(item => item.id === id);
+
+    if (!queueItem) {
+      throw new Error(`未找到上传项: ${id}`);
+    }
+
+    // 如果是正在处理的项目，取消上传
+    if (this.processing && this.processing.id === id) {
+      const transport = this.kernel.getModule('transport');
+      transport.cancel();
+
+      // 清除正在处理项
+      this.processing = null;
+      this.state.processingItem = null;
+      this.state.activeUploads--;
+    }
+
+    // 从队列中移除
+    this.queue = this.queue.filter(item => item.id !== id);
+    this.state.totalQueued = this.queue.length;
+
+    // 持久化队列
+    if (this.options.persistQueue) {
+      if (id === this.state.processingItem) {
+        await this.storage.remove(this.options.processingKey);
+      }
+      await this.persistQueue();
+    }
+
+    // 触发事件
+    this.emitEvent('uploadCancelled', { id });
+    this.emitEvent('queueUpdated', this.getQueueState());
+
+    // 如果当前没有处理中的项目，继续处理队列
+    if (!this.processing && this.state.status === 'processing') {
+      this.processQueue();
+    }
+  }
+
+  // 清空上传队列
+  async clearQueue() {
+    // 如果有正在处理的项目，取消它
+    if (this.processing) {
+      const transport = this.kernel.getModule('transport');
+      transport.cancel();
+
+      // 清除正在处理项
+      this.processing = null;
+      this.state.processingItem = null;
+      this.state.activeUploads = 0;
+    }
+
+    // 清空队列
+    this.queue = [];
+    this.state.totalQueued = 0;
+    this.state.status = 'idle';
+
+    // 持久化队列
+    if (this.options.persistQueue) {
+      await this.storage.remove(this.options.processingKey);
+      await this.storage.remove(this.options.queueKey);
+    }
+
+    // 触发事件
+    this.emitEvent('queueCleared');
+    this.emitEvent('statusChanged', this.state.status);
+    this.emitEvent('queueUpdated', this.getQueueState());
+  }
+
+  // 获取队列状态
+  getQueueState() {
+    return {
+      status: this.state.status,
+      isOnline: this.state.isOnline,
+      processingItem: this.state.processingItem,
+      activeUploads: this.state.activeUploads,
+      totalQueued: this.state.totalQueued,
+      queue: this.queue.map(item => ({
+        id: item.id,
+        fileName: item.metadata.fileName,
+        fileSize: item.metadata.fileSize,
+        status: item.status,
+        progress: item.progress,
+        addedAt: item.metadata.addedAt
+      }))
+    };
+  }
+
+  // 持久化队列
+  async persistQueue() {
+    try {
+      // 只保存必要的信息，不保存文件对象
+      const serializedQueue = this.queue.map(item => {
+        // 克隆对象，但移除文件
+        const { file, ...rest } = item;
+        return {
+          ...rest,
+          // 保存文件的关键信息
+          fileInfo: {
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            lastModified: file.lastModified
+          }
+        };
+      });
+
+      await this.storage.save(this.options.queueKey, serializedQueue);
+    } catch (error) {
+      console.error('持久化队列失败:', error);
+    }
+  }
+
+  // 恢复持久化的队列
+  async restoreQueue() {
+    try {
+      // 恢复队列
+      const savedQueue = await this.storage.get(this.options.queueKey) || [];
+
+      // 恢复正在处理的项目
+      const processingItem = await this.storage.get(this.options.processingKey);
+
+      // 队列中只有元数据，没有实际文件
+      // 需要用户重新选择文件或通过其他方式提供
+      this.queue = savedQueue;
+      this.state.totalQueued = savedQueue.length;
+
+      if (processingItem) {
+        this.processing = processingItem;
+        this.state.processingItem = processingItem.id;
+        this.state.activeUploads = 1;
+      }
+
+      // 触发事件
+      this.emitEvent('queueRestored', this.getQueueState());
+    } catch (error) {
+      console.error('恢复队列失败:', error);
+      // 恢复失败时初始化空队列
+      this.queue = [];
+      this.state.totalQueued = 0;
+    }
+  }
+
+  // 网络状态监听
+  setupNetworkListeners() {
+    if (typeof window !== 'undefined' && 'addEventListener' in window) {
+      // 网络在线状态变化
+      window.addEventListener('online', () => this.handleNetworkChange(true));
+      window.addEventListener('offline', () => this.handleNetworkChange(false));
+
+      // 页面可见性变化（用户切换回页面时检查网络）
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          // 更新网络状态
+          this.state.isOnline = navigator.onLine;
+
+          // 如果在线且配置了自动恢复，继续上传
+          if (this.state.isOnline && this.options.autoResume && this.state.status === 'paused') {
+            this.resumeQueue();
+          }
+        }
+      });
+    }
+  }
+
+  // 处理网络状态变化
+  async handleNetworkChange(isOnline) {
+    // 更新状态
+    this.state.isOnline = isOnline;
+
+    if (isOnline) {
+      // 网络恢复
+      this.emitEvent('networkOnline');
+
+      // 如果配置了自动恢复且当前为暂停状态，恢复上传
+      if (this.options.autoResume && this.state.status === 'paused') {
+        await this.resumeQueue();
+      }
+    } else {
+      // 网络断开
+      this.emitEvent('networkOffline');
+
+      // 自动暂停上传
+      if (this.state.status === 'processing') {
+        await this.pauseQueue();
+      }
+    }
+  }
+
+  // 事件系统
+  on(event, handler) {
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, []);
+    }
+
+    this.listeners.get(event).push(handler);
+    return () => this.off(event, handler); // 返回取消订阅函数
+  }
+
+  off(event, handler) {
+    if (!this.listeners.has(event)) return;
+
+    const handlers = this.listeners.get(event);
+    const index = handlers.indexOf(handler);
+
+    if (index !== -1) {
+      handlers.splice(index, 1);
+    }
+  }
+
+  emitEvent(event, data) {
+    if (!this.listeners.has(event)) return;
+
+    for (const handler of this.listeners.get(event)) {
+      try {
+        handler(data);
+      } catch (error) {
+        console.error(`事件处理器错误 (${event}):`, error);
+      }
+    }
+  }
+}
+
+// 使用示例
+const uploader = new FileChunkKernel()
+  .registerModule('transport', new HttpTransport({
+    target: '/api/upload',
+    chunkSize: 5 * 1024 * 1024
+  }))
+  .registerModule('platform', new BrowserAdapter())
+  .registerModule('storage', new IndexedDBStorage())
+  .registerModule('queueManager', new UploadQueueManager({
+    persistQueue: true,
+    autoResume: true
+  }));
+
+// 批量上传文件
+const inputElement = document.getElementById('file-input');
+inputElement.addEventListener('change', async (event) => {
+  const files = Array.from(event.target.files);
+
+  const queueManager = uploader.getModule('queueManager');
+  const queueIds = await queueManager.addBulkToQueue(files, {
+    source: 'file-input',
+    userId: 'user-123'
+  });
+
+  console.log(`添加了${queueIds.length}个文件到上传队列`);
+});
+
+// 监听队列状态变化
+queueManager.on('queueUpdated', (state) => {
+  console.log('队列状态:', state);
+  updateUIWithQueueState(state);
+});
+
+// 暂停所有上传
+pauseButton.addEventListener('click', () => {
+  queueManager.pauseQueue();
+});
+
+// 恢复所有上传
+resumeButton.addEventListener('click', () => {
+  queueManager.resumeQueue();
+});
+
+// 网络状态变化处理
+queueManager.on('networkOffline', () => {
+  showNetworkOfflineNotification();
+});
+
+queueManager.on('networkOnline', () => {
+  showNetworkRestoredNotification();
+});
+```
+
+## 十四、智能预上传检测
+
+```javascript
+class PreUploadInspector {
+  constructor(options = {}) {
+    this.options = {
+      enableMimeDetection: true,         // 启用MIME类型检测
+      enableContentScanning: true,       // 启用内容预检
+      enableVirusScan: false,            // 启用病毒扫描
+      scanSizeLimit: 50 * 1024 * 1024,   // 内容检测大小限制(50MB)
+      trustedMimeTypes: [],              // 信任的MIME类型列表
+      disallowedFileTypes: [             // 禁止的文件类型
+        'application/x-msdownload',
+        'application/x-executable',
+        'application/x-dosexec',
+        'application/x-msdos-program',
+        'application/bat',
+        'application/cmd'
+      ],
+      highRiskExtensions: [              // 高风险扩展名
+        '.exe', '.dll', '.bat', '.cmd', '.vbs', '.js',
+        '.ws', '.wsf', '.msi', '.jsp', '.php', '.pif'
+      ],
+      // 外部病毒扫描API
+      scanApiEndpoint: null,
+      scanApiKey: null,
+      ...options
+    };
+
+    // 文件签名数据库 (前几个字节的特征码)
+    this.fileSignatures = [
+      { type: 'image/jpeg', signature: [0xFF, 0xD8, 0xFF], extension: '.jpg' },
+      { type: 'image/png', signature: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A], extension: '.png' },
+      { type: 'image/gif', signature: [0x47, 0x49, 0x46, 0x38], extension: '.gif' },
+      { type: 'image/webp', signature: [0x52, 0x49, 0x46, 0x46], extension: '.webp' },
+      { type: 'application/pdf', signature: [0x25, 0x50, 0x44, 0x46], extension: '.pdf' },
+      { type: 'application/zip', signature: [0x50, 0x4B, 0x03, 0x04], extension: '.zip' },
+      { type: 'audio/mpeg', signature: [0x49, 0x44, 0x33], extension: '.mp3' },
+      { type: 'video/mp4', signature: [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70], offset: 4, extension: '.mp4' },
+      { type: 'application/x-msdownload', signature: [0x4D, 0x5A], extension: '.exe' },
+      { type: 'application/x-msdos-program', signature: [0x4D, 0x5A], extension: '.exe' },
+      { type: 'application/vnd.microsoft.portable-executable', signature: [0x4D, 0x5A], extension: '.exe' }
+    ];
+
+    // 基于内容的有害模式检测器
+    this.maliciousPatterns = [
+      // 脚本注入模式
+      { pattern: /<script>|<\/script>|javascript:|eval\(|document\.cookie/i, risk: 'high', type: 'xss' },
+      // SQL注入模式
+      { pattern: /(\%27)|(\')|(\-\-)|(\%23)|(#)/i, risk: 'high', type: 'sql-injection' },
+      // 命令注入模式
+      { pattern: /\&\s*\w+\s*\;|\|\s*\w+\s*\|/i, risk: 'high', type: 'command-injection' },
+      // 敏感文件标记
+      { pattern: /confidential|password|secret|private key/i, risk: 'medium', type: 'sensitive-data' }
+    ];
+  }
+
+  async init(kernel) {
+    this.kernel = kernel;
+  }
+
+  // 完整的文件检查过程
+  async inspectFile(file) {
+    const result = {
+      file,
+      isValid: true,
+      reasons: [],
+      warnings: [],
+      detectedMimeType: null,
+      extensionMatch: true,
+      contentScanned: false,
+      maliciousContent: false
+    };
+
+    try {
+      // 1. 基本检查 (文件名、大小)
+      const basicCheck = this.performBasicCheck(file);
+      if (!basicCheck.isValid) {
+        result.isValid = false;
+        result.reasons.push(...basicCheck.reasons);
+      }
+      result.warnings.push(...basicCheck.warnings);
+
+      // 2. MIME类型检测
+      if (this.options.enableMimeDetection) {
+        const mimeResult = await this.detectActualMimeType(file);
+        result.detectedMimeType = mimeResult.mimeType;
+        result.extensionMatch = mimeResult.extensionMatch;
+
+        if (mimeResult.isMalicious) {
+          result.isValid = false;
+          result.reasons.push('文件类型可能存在安全风险');
+        }
+
+        if (!mimeResult.extensionMatch) {
+          result.warnings.push('文件扩展名与实际类型不匹配，可能被篡改');
+        }
+      }
+
+      // 3. 内容预检
+      if (this.options.enableContentScanning && file.size <= this.options.scanSizeLimit) {
+        const contentResult = await this.scanFileContent(file);
+        result.contentScanned = true;
+        result.maliciousContent = contentResult.isMalicious;
+
+        if (contentResult.isMalicious) {
+          result.isValid = false;
+          result.reasons.push(`检测到可疑内容: ${contentResult.pattern}`);
+        }
+      }
+
+      // 4. 病毒扫描 (如果配置了API)
+      if (this.options.enableVirusScan && this.options.scanApiEndpoint) {
+        const scanResult = await this.scanForVirus(file);
+
+        if (scanResult.infected) {
+          result.isValid = false;
+          result.reasons.push(`可能包含恶意代码: ${scanResult.threatName}`);
+        }
+      }
+
+      // 触发检测完成事件
+      this.kernel.emit('inspectionComplete', result);
+
+      return result;
+    } catch (error) {
+      // 检测过程异常
+      result.isValid = false;
+      result.reasons.push(`检测过程出错: ${error.message}`);
+      return result;
+    }
+  }
+
+  // 基本检查
+  performBasicCheck(file) {
+    const result = {
+      isValid: true,
+      reasons: [],
+      warnings: []
+    };
+
+    // 检查文件是否为空
+    if (!file || file.size === 0) {
+      result.isValid = false;
+      result.reasons.push('文件为空');
+      return result;
+    }
+
+    // 检查高风险扩展名
+    const fileName = file.name.toLowerCase();
+    for (const ext of this.options.highRiskExtensions) {
+      if (fileName.endsWith(ext)) {
+        result.isValid = false;
+        result.reasons.push(`不允许上传${ext}类型文件，存在安全风险`);
+        break;
+      }
+    }
+
+    // 检查文件名中的可疑字符
+    if (/[<>:"/\\|?*\x00-\x1F]/.test(file.name)) {
+      result.warnings.push('文件名包含特殊字符，可能导致存储问题');
+    }
+
+    // 空白文件名检查
+    if (file.name.trim() === '') {
+      result.warnings.push('文件名为空');
+    }
+
+    // 检查隐藏的可执行文件（例如：.exe.jpg）
+    if (/\.(exe|dll|bat|cmd|msi)\..+$/i.test(fileName)) {
+      result.isValid = false;
+      result.reasons.push('检测到隐藏的可执行文件扩展名');
+    }
+
+    return result;
+  }
+
+  // 检测实际MIME类型
+  async detectActualMimeType(file) {
+    const result = {
+      mimeType: file.type,
+      declaredMimeType: file.type,
+      extensionMatch: true,
+      isMalicious: false
+    };
+
+    try {
+      // 读取文件头部
+      const headerBytes = await this.readFileHeader(file, 16);
+
+      // 基于文件签名检测MIME类型
+      for (const sig of this.fileSignatures) {
+        const offset = sig.offset || 0;
+        let match = true;
+
+        for (let i = 0; i < sig.signature.length; i++) {
+          if (headerBytes[i + offset] !== sig.signature[i]) {
+            match = false;
+            break;
+          }
+        }
+
+        if (match) {
+          result.mimeType = sig.type;
+
+          // 检查检测到的类型是否与声明类型一致
+          if (result.mimeType !== file.type && file.type !== '') {
+            result.extensionMatch = false;
+          }
+
+          // 检查是否为高危类型
+          if (this.options.disallowedFileTypes.includes(result.mimeType)) {
+            result.isMalicious = true;
+          }
+
+          break;
+        }
+      }
+
+      // 检查扩展名与MIME类型是否匹配
+      const fileExt = this.getFileExtension(file.name).toLowerCase();
+      const expectedExt = this.getExpectedExtension(result.mimeType);
+
+      if (expectedExt && fileExt !== expectedExt) {
+        result.extensionMatch = false;
+      }
+
+      return result;
+    } catch (error) {
+      console.error('MIME类型检测失败:', error);
+      return result; // 发生错误时返回声明的类型
+    }
+  }
+
+  // 扫描文件内容
+  async scanFileContent(file) {
+    const result = {
+      isMalicious: false,
+      pattern: null,
+      contentSample: null
+    };
+
+    // 只扫描文本类文件
+    const textTypes = [
+      'text/', 'application/json', 'application/javascript', 'application/xml',
+      'application/x-httpd-php', 'application/xhtml+xml'
+    ];
+
+    // 检查文件类型是否应该扫描
+    const shouldScan = textTypes.some(type => file.type.startsWith(type));
+    if (!shouldScan) return result;
+
+    try {
+      // 读取文件内容样本（最多前10KB）
+      const contentSample = await this.readFileContent(file, 10240);
+      result.contentSample = contentSample;
+
+      // 扫描恶意模式
+      for (const pattern of this.maliciousPatterns) {
+        if (pattern.pattern.test(contentSample)) {
+          result.isMalicious = true;
+          result.pattern = pattern.type;
+          break;
+        }
+      }
+
+      return result;
+    } catch (error) {
+      console.error('文件内容扫描失败:', error);
+      return result;
+    }
+  }
+
+  // 调用外部病毒扫描API
+  async scanForVirus(file) {
+    // 如果没有配置扫描API，返回未检测
+    if (!this.options.scanApiEndpoint) {
+      return { scanned: false, infected: false };
+    }
+
+    try {
+      // 准备表单数据
+      const formData = new FormData();
+      formData.append('file', file);
+      if (this.options.scanApiKey) {
+        formData.append('apiKey', this.options.scanApiKey);
+      }
+
+      // 发送请求
+      const response = await fetch(this.options.scanApiEndpoint, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error(`扫描服务返回错误: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      return {
+        scanned: true,
+        infected: result.infected || false,
+        threatName: result.threatName || null,
+        scanScore: result.scanScore || 0
+      };
+    } catch (error) {
+      console.error('病毒扫描失败:', error);
+      return { scanned: false, infected: false, error: error.message };
+    }
+  }
+
+  // 读取文件头部
+  readFileHeader(file, bytesToRead) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        const arrayBuffer = e.target.result;
+        const bytes = new Uint8Array(arrayBuffer);
+        resolve(bytes);
+      };
+
+      reader.onerror = () => reject(reader.error);
+
+      // 只读取前面的字节
+      const blob = file.slice(0, bytesToRead);
+      reader.readAsArrayBuffer(blob);
+    });
+  }
+
+  // 读取文件内容
+  readFileContent(file, maxBytes) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        resolve(e.target.result);
+      };
+
+      reader.onerror = () => reject(reader.error);
+
+      // 只读取指定大小
+      const blob = file.slice(0, Math.min(maxBytes, file.size));
+      reader.readAsText(blob);
+    });
+  }
+
+  // 获取文件扩展名
+  getFileExtension(fileName) {
+    const match = fileName.match(/\.([^.]+)$/);
+    return match ? `.${match[1].toLowerCase()}` : '';
+  }
+
+  // 根据MIME类型获取预期的扩展名
+  getExpectedExtension(mimeType) {
+    for (const sig of this.fileSignatures) {
+      if (sig.type === mimeType) {
+        return sig.extension;
+      }
+    }
+    return null;
+  }
+}
+
+// 使用示例
+const uploader = new FileChunkKernel()
+  .registerModule('transport', new HttpTransport({
+    target: '/api/upload',
+    chunkSize: 5 * 1024 * 1024
+  }))
+  .registerModule('platform', new BrowserAdapter())
+  .registerModule('inspector', new PreUploadInspector({
+    enableMimeDetection: true,
+    enableContentScanning: true,
+    enableVirusScan: false
+  }));
+
+// 在上传前进行检查
+uploader.on('beforeUpload', async (file) => {
+  const inspector = uploader.getModule('inspector');
+  const inspectionResult = await inspector.inspectFile(file);
+
+  if (!inspectionResult.isValid) {
+    // 文件未通过预检
+    const error = new Error('文件未通过安全检查');
+    error.inspectionResult = inspectionResult;
+    throw error;
+  }
+
+  // 有警告但允许上传
+  if (inspectionResult.warnings.length > 0) {
+    console.warn('文件上传警告:', inspectionResult.warnings);
+  }
+
+  // 如果检测到MIME类型与声明不一致，使用检测到的类型
+  if (inspectionResult.detectedMimeType &&
+      inspectionResult.detectedMimeType !== file.type) {
+    console.log(`文件实际类型: ${inspectionResult.detectedMimeType}, 声明类型: ${file.type}`);
+  }
+
+  return true;
+});
+
+// 处理检查失败
+uploader.on('error', (error) => {
+  if (error.inspectionResult) {
+    // 显示安全检查失败原因
+    alert(`文件安全检查失败: ${error.inspectionResult.reasons.join(', ')}`);
+  } else {
+    // 处理其他错误
+    console.error('上传错误:', error);
+  }
+});
+```
+
+## 十五、性能比较
 
 | 特性                | FileChunk Pro     | 传统实现       | 优势说明                               |
 |---------------------|-------------------|---------------|----------------------------------------|
@@ -2125,7 +3559,7 @@ filechunk-pro
 | 断点续传成功率      | >99.9%            | 90-95%        | 分布式存储+增强校验                    |
 | 小程序大文件支持    | 突破100MB限制     | 受限制        | 智能分片+文件系统优化                  |
 
-## 十四、使用场景对比
+## 十六、使用场景对比
 
 | 平台          | 使用示例                    | 文件限制     | 性能特点                           |
 |--------------|----------------------------|------------|----------------------------------|

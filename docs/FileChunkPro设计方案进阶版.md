@@ -4732,23 +4732,23 @@ filechunk-pro
 │   ├── filechunk-pro.js             // UMD打包 (35KB)
 │   ├── filechunk-pro.min.js         // 压缩版 (12KB)
 │   ├── filechunk-pro.esm.js         // ES模块
-│   ├── filechunk-pro.d.ts           // 类型声明
+│   ├── filechunk-pro.d.js           // 类型声明
 │   ├── filechunk-pro-worker.js      // Web Worker
 │   └── filechunk-pro-wasm.wasm      // WebAssembly
 ├── src/
 │   ├── core/
-│   │   ├── kernel.ts                // 微内核
-│   │   ├── module-manager.ts        // 模块管理器
-│   │   └── event-bus.ts             // 事件系统
+│   │   ├── kernel.js                // 微内核
+│   │   ├── module-manager.js        // 模块管理器
+│   │   └── event-bus.js             // 事件系统
 │   ├── modules/
 │   │   ├── transport/               // 传输模块
-│   │   │   ├── http-transport.ts
-│   │   │   ├── chunk-strategy.ts
-│   │   │   ├── concurrency.ts
-│   │   │   └── error-handler.ts
+│   │   │   ├── http-transport.js
+│   │   │   ├── chunk-strategy.js
+│   │   │   ├── concurrency.js
+│   │   │   └── error-handler.js
 │   │   ├── platform/               // 平台适配模块
-│   │   │   ├── browser.ts
-│   │   │   ├── wechat.ts
+│   │   │   ├── browser.js
+│   │   │   ├── wechat.js
 │   │   │   ├── alipay.ts
 │   │   │   └── platform-factory.ts
 │   │   ├── storage/                // 存储模块

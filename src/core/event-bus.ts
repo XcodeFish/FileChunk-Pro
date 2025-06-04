@@ -3,7 +3,9 @@ import {
   EventHandler,
   EventSubscription,
   EventSubscriptionOptions,
-  EventEmitOptions
+  EventEmitOptions,
+  EventHistoryOptions,
+  EventRecord
 } from '../types/events';
 
 /**
@@ -22,6 +24,16 @@ const DEFAULT_EMIT_OPTIONS: EventEmitOptions = {
   waitForAll: true,
   catchErrors: true,
   timeout: 30000 // 30秒超时
+};
+
+/**
+ * 默认事件历史选项
+ */
+const DEFAULT_HISTORY_OPTIONS: EventHistoryOptions = {
+  enabled: false,
+  maxEvents: 100,
+  includeData: false,
+  eventFilter: null
 };
 
 /**
@@ -49,6 +61,16 @@ export class EventBusImpl implements EventBus {
    * 订阅ID计数器
    */
   private _idCounter: number = 0;
+
+  /**
+   * 事件历史记录
+   */
+  private _eventHistory: EventRecord[] = [];
+
+  /**
+   * 事件历史设置
+   */
+  private _historyOptions: EventHistoryOptions = DEFAULT_HISTORY_OPTIONS;
 
   /**
    * 订阅事件
@@ -114,7 +136,7 @@ export class EventBusImpl implements EventBus {
    * @param eventName 事件名称，支持通配符*匹配任意字符
    * @param handler 事件处理器
    * @param options 订阅选项
-   * @returns 订阅ID
+   * @returns this 链式调用的实例
    */
   once<T = any>(
     eventName: string,
@@ -257,6 +279,9 @@ export class EventBusImpl implements EventBus {
       ...options
     };
 
+    // 记录事件历史
+    this._recordEvent(eventName, eventData);
+
     // 如果是异步模式，调用异步发布方法
     if (mergedOptions.async) {
       return this.emitAsync(eventName, eventData, mergedOptions);
@@ -311,6 +336,9 @@ export class EventBusImpl implements EventBus {
       async: true,
       ...options
     };
+
+    // 记录事件历史（如果启用）
+    this._recordEvent(eventName, eventData);
 
     const handlers = this._getEventHandlers(eventName);
 
@@ -424,11 +452,128 @@ export class EventBusImpl implements EventBus {
 
   /**
    * 清空所有订阅
+   *
+   * @returns this 链式调用的实例
    */
-  clear(): void {
+  clear(): EventBus {
     this._subscriptions.clear();
     this._wildcardSubscriptions = [];
     this._subscriptionById.clear();
+    return this;
+  }
+
+  /**
+   * 配置事件历史记录
+   *
+   * @param options 事件历史选项
+   * @returns this 链式调用的实例
+   */
+  configureHistory(options: Partial<EventHistoryOptions>): EventBus {
+    this._historyOptions = {
+      ...this._historyOptions,
+      ...options
+    };
+
+    // 如果禁用了历史记录，清空历史
+    if (!this._historyOptions.enabled) {
+      this.clearHistory();
+    }
+
+    return this;
+  }
+
+  /**
+   * 清空事件历史记录
+   *
+   * @returns this 链式调用的实例
+   */
+  clearHistory(): EventBus {
+    this._eventHistory = [];
+    return this;
+  }
+
+  /**
+   * 获取事件历史记录
+   *
+   * @param eventName 可选，指定事件名称过滤
+   * @param limit 可选，限制返回记录数量
+   * @returns 事件历史记录数组
+   */
+  getHistory(eventName?: string, limit?: number): EventRecord[] {
+    // 如果历史记录功能未启用，返回空数组
+    if (!this._historyOptions.enabled) {
+      return [];
+    }
+
+    let history = this._eventHistory;
+
+    // 按事件名称过滤
+    if (eventName) {
+      history = history.filter(
+        record =>
+          record.eventName === eventName || this._eventMatchesWildcard(record.eventName, eventName)
+      );
+    }
+
+    // 限制数量
+    if (typeof limit === 'number' && limit > 0) {
+      history = history.slice(-limit);
+    }
+
+    return [...history]; // 返回副本，防止外部修改
+  }
+
+  /**
+   * 重放历史事件
+   *
+   * @param eventFilter 可选，事件过滤函数或事件名称
+   * @param limit 可选，限制重放的事件数量
+   * @returns Promise对象，resolve为重放的事件数量
+   */
+  async replayHistory(
+    eventFilter?: string | ((record: EventRecord) => boolean),
+    limit?: number
+  ): Promise<number> {
+    // 如果历史记录功能未启用，无法重放
+    if (!this._historyOptions.enabled || this._eventHistory.length === 0) {
+      return 0;
+    }
+
+    let historyToReplay = [...this._eventHistory]; // 创建副本
+
+    // 应用过滤器
+    if (typeof eventFilter === 'string') {
+      // 字符串过滤器，按事件名称过滤
+      const eventName = eventFilter;
+      historyToReplay = historyToReplay.filter(
+        record =>
+          record.eventName === eventName || this._eventMatchesWildcard(record.eventName, eventName)
+      );
+    } else if (typeof eventFilter === 'function') {
+      // 函数过滤器
+      historyToReplay = historyToReplay.filter(eventFilter);
+    }
+
+    // 应用数量限制
+    if (typeof limit === 'number' && limit > 0) {
+      historyToReplay = historyToReplay.slice(-limit);
+    }
+
+    // 重放事件
+    for (const record of historyToReplay) {
+      // 创建重放的选项，标记为重放事件
+      const replayOptions: EventEmitOptions = {
+        async: true,
+        waitForAll: true,
+        catchErrors: true,
+        isReplay: true
+      };
+
+      // 重放事件但不记录历史
+      await this.emitAsync(record.eventName, record.data, replayOptions);
+    }
+
+    return historyToReplay.length;
   }
 
   /**
@@ -510,5 +655,44 @@ export class EventBusImpl implements EventBus {
 
     const regex = new RegExp(`^${regexPattern}$`);
     return regex.test(eventName);
+  }
+
+  /**
+   * 记录事件到历史
+   *
+   * @param eventName 事件名称
+   * @param eventData 事件数据
+   */
+  private _recordEvent<T = any>(eventName: string, eventData: T): void {
+    // 如果历史记录功能未启用，直接返回
+    if (!this._historyOptions.enabled) {
+      return;
+    }
+
+    // 应用事件过滤器
+    if (
+      this._historyOptions.eventFilter &&
+      !this._historyOptions.eventFilter(eventName, eventData)
+    ) {
+      return;
+    }
+
+    // 创建事件记录
+    const eventRecord: EventRecord = {
+      timestamp: Date.now(),
+      eventName,
+      data: this._historyOptions.includeData ? eventData : undefined
+    };
+
+    // 添加到历史记录
+    this._eventHistory.push(eventRecord);
+
+    // 如果超出最大记录数，移除最旧的
+    if (
+      this._historyOptions.maxEvents > 0 &&
+      this._eventHistory.length > this._historyOptions.maxEvents
+    ) {
+      this._eventHistory = this._eventHistory.slice(-this._historyOptions.maxEvents);
+    }
   }
 }

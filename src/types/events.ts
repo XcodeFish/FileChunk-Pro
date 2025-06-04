@@ -81,6 +81,56 @@ export interface EventEmitOptions {
    * 超时时间(ms)，仅在异步且waitForAll时有效
    */
   timeout?: number;
+
+  /**
+   * 是否为重放的事件
+   */
+  isReplay?: boolean;
+}
+
+/**
+ * 事件历史记录项
+ */
+export interface EventRecord {
+  /**
+   * 事件发生的时间戳
+   */
+  timestamp: number;
+
+  /**
+   * 事件名称
+   */
+  eventName: string;
+
+  /**
+   * 事件数据（如果配置为记录数据）
+   */
+  data?: any;
+}
+
+/**
+ * 事件历史配置选项
+ */
+export interface EventHistoryOptions {
+  /**
+   * 是否启用事件历史记录
+   */
+  enabled: boolean;
+
+  /**
+   * 最大保存的事件数量
+   */
+  maxEvents: number;
+
+  /**
+   * 是否包含事件数据
+   */
+  includeData: boolean;
+
+  /**
+   * 事件过滤器，决定哪些事件需要记录
+   */
+  eventFilter: ((eventName: string, eventData: any) => boolean) | null;
 }
 
 /**
@@ -188,6 +238,44 @@ export interface EventBus {
 
   /**
    * 清空所有订阅
+   *
+   * @returns this 链式调用的实例
    */
-  clear(): void;
+  clear(): EventBus;
+
+  /**
+   * 配置事件历史记录
+   *
+   * @param options 事件历史选项
+   * @returns this 链式调用的实例
+   */
+  configureHistory(options: Partial<EventHistoryOptions>): EventBus;
+
+  /**
+   * 清空事件历史记录
+   *
+   * @returns this 链式调用的实例
+   */
+  clearHistory(): EventBus;
+
+  /**
+   * 获取事件历史记录
+   *
+   * @param eventName 可选，指定事件名称过滤
+   * @param limit 可选，限制返回记录数量
+   * @returns 事件历史记录数组
+   */
+  getHistory(eventName?: string, limit?: number): EventRecord[];
+
+  /**
+   * 重放历史事件
+   *
+   * @param eventFilter 可选，事件过滤函数或事件名称
+   * @param limit 可选，限制重放的事件数量
+   * @returns Promise对象，resolve为重放的事件数量
+   */
+  replayHistory(
+    eventFilter?: string | ((record: EventRecord) => boolean),
+    limit?: number
+  ): Promise<number>;
 }

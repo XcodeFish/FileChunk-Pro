@@ -1,151 +1,130 @@
 import { EventBusImpl } from '../core/event-bus';
 
 /**
- * 事件总线示例
- *
- * 本示例展示了事件总线的基本用法和高级特性，包括：
- * 1. 基本的事件订阅和发布
- * 2. 一次性事件(once)
- * 3. 事件优先级
- * 4. 通配符订阅
- * 5. 异步事件处理
+ * 事件总线使用示例
  */
-async function runEventBusExample(): Promise<void> {
-  // 创建事件总线实例
-  const eventBus = new EventBusImpl();
+// 创建事件总线实例
+const eventBus = new EventBusImpl();
 
-  console.log('=== 事件总线示例 ===');
+// 配置事件历史记录
+eventBus.configureHistory({
+  enabled: true,
+  maxEvents: 50,
+  includeData: true
+});
 
-  // 1. 基本的事件订阅和发布
-  console.log('\n1. 基本的事件订阅和发布:');
+console.log('===== 基础订阅和发布 =====');
 
-  // 订阅事件
-  eventBus.on('message', data => {
-    console.log(`收到消息: ${data.text}`);
+// 基础订阅和发布
+const subId = eventBus.on('user.login', data => {
+  console.log('用户登录事件:', data);
+});
+
+eventBus.emit('user.login', { userId: 123, username: '张三' });
+
+// 一次性订阅
+console.log('\n===== 一次性订阅 =====');
+eventBus.once('user.logout', data => {
+  console.log('用户登出事件(一次性):', data);
+});
+
+// 发布两次，第二次不应触发
+eventBus.emit('user.logout', { userId: 123, username: '张三' });
+eventBus.emit('user.logout', { userId: 123, username: '张三' });
+
+// 通配符订阅
+console.log('\n===== 通配符订阅 =====');
+eventBus.on('user.*', data => {
+  console.log('用户相关事件(通配符):', data);
+});
+
+eventBus.emit('user.register', { userId: 456, username: '李四' });
+
+// 优先级测试
+console.log('\n===== 优先级测试 =====');
+eventBus.on('priority.test', () => console.log('低优先级处理器'), { priority: 1 });
+eventBus.on('priority.test', () => console.log('高优先级处理器'), { priority: 10 });
+eventBus.on('priority.test', () => console.log('中优先级处理器'), { priority: 5 });
+
+eventBus.emit('priority.test', null);
+
+// 异步事件测试
+console.log('\n===== 异步事件测试 =====');
+eventBus.on('async.test', async data => {
+  await new Promise(resolve => setTimeout(resolve, 500));
+  console.log('异步事件处理完成:', data);
+});
+
+// 使用异步模式发布
+(async () => {
+  console.log('开始异步事件发布');
+  await eventBus.emitAsync('async.test', { value: '异步数据' });
+  console.log('异步事件发布完成');
+
+  // 事件历史与回放测试
+  console.log('\n===== 事件历史与回放测试 =====');
+
+  // 查看历史记录
+  const history = eventBus.getHistory();
+  console.log('事件历史记录数:', history.length);
+
+  // 过滤历史记录
+  const userEvents = eventBus.getHistory('user.*');
+  console.log(
+    '用户事件历史记录:',
+    userEvents.map(h => h.eventName)
+  );
+
+  // 重放历史事件
+  console.log('重放用户事件:');
+  const replayListener = eventBus.on('user.*', data => {
+    console.log('重放的用户事件:', data);
   });
+
+  const replayCount = await eventBus.replayHistory('user.*');
+  console.log(`重放了 ${replayCount} 个事件`);
+
+  // 移除重放监听器
+  eventBus.off(replayListener);
+
+  // 按订阅者分组管理测试
+  console.log('\n===== 订阅者分组管理测试 =====');
+  const subscriberId = 'test-subscriber';
+  eventBus.on('group.event1', data => console.log('组事件1:', data), { subscriberId });
+  eventBus.on('group.event2', data => console.log('组事件2:', data), { subscriberId });
+
+  console.log(
+    '取消订阅前订阅者数:',
+    eventBus.countSubscribers('group.event1') + eventBus.countSubscribers('group.event2')
+  );
+
+  // 通过订阅者ID取消所有订阅
+  const cancelledCount = eventBus.offBySubscriber(subscriberId);
+  console.log(`取消了 ${cancelledCount} 个订阅`);
+  console.log(
+    '取消订阅后订阅者数:',
+    eventBus.countSubscribers('group.event1') + eventBus.countSubscribers('group.event2')
+  );
+
+  // 取消最开始的订阅
+  console.log('\n===== 取消订阅测试 =====');
+  console.log('取消前user.login订阅者数:', eventBus.countSubscribers('user.login'));
+  eventBus.off(subId);
+  console.log('取消后user.login订阅者数:', eventBus.countSubscribers('user.login'));
+
+  // 最后清理
+  console.log('\n===== 清理测试 =====');
+  console.log('清空前事件名称:', eventBus.getEventNames());
+  eventBus.clear();
+  console.log('清空后事件名称:', eventBus.getEventNames());
+
+  // 链式调用示例
+  console.log('\n===== 链式调用示例 =====');
+  // 配置历史记录并注册事件监听器
+  eventBus
+    .configureHistory({ enabled: true })
+    .on('chain.test', data => console.log('链式调用事件:', data));
 
   // 发布事件
-  eventBus.emit('message', { text: 'Hello, World!' });
-
-  // 2. 一次性事件
-  console.log('\n2. 一次性事件:');
-
-  // 订阅一次性事件
-  eventBus.once('one-time-event', data => {
-    console.log(`收到一次性事件: ${data.text}`);
-  });
-
-  // 发布两次，但只会触发一次
-  eventBus.emit('one-time-event', { text: '第一次触发' });
-  eventBus.emit('one-time-event', { text: '第二次触发 (不会输出)' });
-
-  // 3. 事件优先级
-  console.log('\n3. 事件优先级:');
-
-  // 低优先级订阅
-  eventBus.on(
-    'prioritized-event',
-    data => {
-      console.log(`低优先级处理器: ${data.text}`);
-    },
-    { priority: 1 }
-  );
-
-  // 高优先级订阅
-  eventBus.on(
-    'prioritized-event',
-    data => {
-      console.log(`高优先级处理器: ${data.text}`);
-    },
-    { priority: 10 }
-  );
-
-  // 中等优先级订阅
-  eventBus.on(
-    'prioritized-event',
-    data => {
-      console.log(`中等优先级处理器: ${data.text}`);
-    },
-    { priority: 5 }
-  );
-
-  // 发布事件，将按优先级顺序调用处理器
-  eventBus.emit('prioritized-event', { text: '按优先级排序的消息' });
-
-  // 4. 通配符订阅
-  console.log('\n4. 通配符订阅:');
-
-  // 使用通配符订阅多个事件
-  eventBus.on('user.*', data => {
-    console.log(`用户事件: ${data.type}, 用户: ${data.username}`);
-  });
-
-  // 发布匹配的事件
-  eventBus.emit('user.login', { type: '登录', username: 'alice' });
-  eventBus.emit('user.logout', { type: '登出', username: 'bob' });
-
-  // 不匹配的事件不会触发
-  eventBus.emit('system.startup', { type: '系统启动' });
-
-  // 5. 异步事件处理
-  console.log('\n5. 异步事件处理:');
-
-  // 添加异步处理器
-  eventBus.on('async-event', async data => {
-    console.log(`开始处理异步事件: ${data.text}`);
-    await new Promise(resolve => setTimeout(resolve, 100));
-    console.log(`异步处理完成: ${data.text}`);
-  });
-
-  // 同步发布 - 不等待结果
-  console.log('同步发布:');
-  eventBus.emit('async-event', { text: '同步模式' });
-  console.log('同步发布后立即执行');
-
-  // 异步发布 - 等待所有处理器完成
-  console.log('\n异步发布:');
-  await eventBus.emitAsync('async-event', { text: '异步模式' });
-  console.log('所有异步处理器已完成');
-
-  // 取消订阅示例
-  console.log('\n6. 取消订阅:');
-
-  // 保存订阅ID
-  const subId = eventBus.on('cancelable', data => {
-    console.log(`这条消息不应该显示: ${data.text}`);
-  });
-
-  // 取消订阅
-  eventBus.off(subId);
-
-  // 发布事件，但已没有处理器
-  eventBus.emit('cancelable', { text: '已取消的事件' });
-  console.log('事件已发布，但没有处理器接收');
-
-  // 清理所有订阅
-  console.log('\n7. 清理所有订阅:');
-  eventBus.clear();
-  console.log('所有订阅已清理');
-
-  // 统计和检查
-  console.log('\n8. 订阅统计:');
-
-  // 添加一些新的订阅
-  eventBus.on('stats.event1', () => {});
-  eventBus.on('stats.event2', () => {});
-  eventBus.on('stats.event2', () => {});
-
-  // 检查是否有订阅者
-  console.log(`有stats.event1订阅者: ${eventBus.hasSubscribers('stats.event1')}`);
-  console.log(`有stats.event2订阅者: ${eventBus.hasSubscribers('stats.event2')}`);
-  console.log(`有stats.event3订阅者: ${eventBus.hasSubscribers('stats.event3')}`);
-
-  // 获取订阅者数量
-  console.log(`stats.event1订阅者数量: ${eventBus.countSubscribers('stats.event1')}`);
-  console.log(`stats.event2订阅者数量: ${eventBus.countSubscribers('stats.event2')}`);
-
-  // 获取所有事件名称
-  console.log(`所有事件名称: ${eventBus.getEventNames().join(', ')}`);
-}
-
-export { runEventBusExample };
+  eventBus.emit('chain.test', { message: '链式API工作正常' });
+})();

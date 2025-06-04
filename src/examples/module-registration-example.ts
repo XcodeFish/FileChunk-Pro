@@ -43,12 +43,6 @@ class LoggerModule extends BaseModule {
  * 配置模块示例，依赖日志模块
  */
 class ConfigModule extends BaseModule {
-  private _config: Record<string, any> = {
-    appName: 'FileChunk Pro',
-    version: '1.0.0',
-    maxChunkSize: 2 * 1024 * 1024 // 2MB
-  };
-
   constructor() {
     super({
       id: 'config',
@@ -56,6 +50,13 @@ class ConfigModule extends BaseModule {
       version: '1.0.0',
       description: '提供配置管理功能',
       dependencies: ['logger'] // 声明依赖日志模块
+    });
+
+    // 初始化配置
+    this.updateConfig({
+      appName: 'FileChunk Pro',
+      version: '1.0.0',
+      maxChunkSize: 2 * 1024 * 1024 // 2MB
     });
   }
 
@@ -90,11 +91,11 @@ class ConfigModule extends BaseModule {
   }
 
   get<T>(key: string, defaultValue?: T): T | undefined {
-    return (this._config[key] as T) || defaultValue;
+    return this.getConfig<T>(key, defaultValue) as T | undefined;
   }
 
   set<T>(key: string, value: T): void {
-    this._config[key] = value;
+    this.updateConfig({ [key]: value });
 
     // 使用日志模块记录配置变更
     const logger = this.getModule<LoggerModule>('logger');

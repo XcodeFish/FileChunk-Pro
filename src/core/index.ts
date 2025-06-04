@@ -14,6 +14,9 @@ export { ModuleRegistryImpl } from './module-registry';
 // 导出事件总线
 export { EventBusImpl } from './event-bus';
 
+// 导出模块工具类
+export { ModuleUtil } from './module-util';
+
 // 重导出模块类型定义
 export * from '../types/modules';
 

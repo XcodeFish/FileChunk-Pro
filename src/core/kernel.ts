@@ -780,7 +780,7 @@ export class Kernel {
   registerModule(module: Module, options?: Partial<ModuleRegistrationOptions>): Kernel {
     if (!(module instanceof BaseModule)) {
       throw new ModuleRegistrationError(
-        `模块必须继承自BaseModule`,
+        '模块必须继承自BaseModule',
         module?.metadata?.id || 'unknown'
       );
     }

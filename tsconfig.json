@@ -28,7 +28,8 @@
     "importHelpers": true,
     "noImplicitAny": true,
     "noImplicitThis": true,
-    "noImplicitReturns": true
+    "noImplicitReturns": true,
+    "typeRoots": ["./node_modules/@types", "./src/platforms/native"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "examples", "tests", "**/*.test.ts"]

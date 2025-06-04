@@ -1,4 +1,3 @@
-
 是的，看起来编辑文件功能遇到了问题。我将为您提供完整的优化版README.md文档，您可以直接复制粘贴。
 
 # 通用大文件上传工具 - FileChunk Pro
@@ -66,7 +65,6 @@ filechunk-pro/
 │   │   │
 │   │   ├── miniapp/             # 小程序适配
 │   │   │   ├── wechat-adapter.ts
-│   │   │   ├── alipay-adapter.ts
 │   │   │   └── miniapp-utils.ts
 │   │   │
 │   │   └── native/              # 原生平台适配
@@ -120,7 +118,6 @@ filechunk-pro/
 ├── packages/                    # 不同平台专用包
 │   ├── miniapp/                 # 小程序专用
 │   │   ├── wechat/
-│   │   └── alipay/
 │   │
 │   ├── react/                   # React集成
 │   │
@@ -208,24 +205,27 @@ import { FileChunkKernel, HttpTransport, BrowserAdapter } from 'filechunk-pro';
 
 // 创建微内核实例
 const uploader = new FileChunkKernel()
-  .registerModule('transport', new HttpTransport({
-    target: '/api/upload',
-    chunkSize: 5 * 1024 * 1024, // 5MB分片
-    concurrency: 3 // 并发线程数
-  }))
+  .registerModule(
+    'transport',
+    new HttpTransport({
+      target: '/api/upload',
+      chunkSize: 5 * 1024 * 1024, // 5MB分片
+      concurrency: 3 // 并发线程数
+    })
+  )
   .registerModule('platform', new BrowserAdapter())
   .registerModule('storage', new IndexedDBStorage());
 
 // 监听事件
-uploader.on('progress', (percentage) => {
+uploader.on('progress', percentage => {
   console.log(`上传进度: ${percentage}%`);
 });
 
-uploader.on('success', (fileUrl) => {
+uploader.on('success', fileUrl => {
   console.log('上传成功:', fileUrl);
 });
 
-uploader.on('error', (err) => {
+uploader.on('error', err => {
   console.error('上传失败:', err);
 });
 
@@ -311,7 +311,7 @@ class FileChunkKernel {
 
   // 状态管理
   updateState(newState) {
-    this.state = {...this.state, ...newState};
+    this.state = { ...this.state, ...newState };
     this.emit('stateChange', this.state);
 
     if (newState.progress !== undefined) {
@@ -330,7 +330,7 @@ class FileChunkKernel {
   // 上传入口
   async upload(file) {
     try {
-      this.updateState({file, status: 'preparing', progress: 0});
+      this.updateState({ file, status: 'preparing', progress: 0 });
 
       // 获取传输模块
       const transport = this.getModule('transport');
@@ -344,11 +344,11 @@ class FileChunkKernel {
       // 执行上传
       const result = await transport.start(file, platform);
 
-      this.updateState({status: 'completed', result, progress: 100});
+      this.updateState({ status: 'completed', result, progress: 100 });
 
       return result;
     } catch (error) {
-      this.updateState({status: 'error', error});
+      this.updateState({ status: 'error', error });
       throw error;
     }
   }
@@ -367,21 +367,21 @@ class FileChunkKernel {
   pause() {
     const transport = this.getModule('transport');
     transport.pause();
-    this.updateState({status: 'paused'});
+    this.updateState({ status: 'paused' });
   }
 
   // 恢复上传
   resume() {
     const transport = this.getModule('transport');
     transport.resume();
-    this.updateState({status: 'uploading'});
+    this.updateState({ status: 'uploading' });
   }
 
   // 取消上传
   cancel() {
     const transport = this.getModule('transport');
     transport.cancel();
-    this.updateState({status: 'canceled'});
+    this.updateState({ status: 'canceled' });
   }
 }
 ```
@@ -470,7 +470,10 @@ class HttpTransport {
         let chunk;
         let processingCount = 0;
 
-        while ((chunk = chunkIterator.next()) && processingCount < this.concurrencyManager.concurrency) {
+        while (
+          (chunk = chunkIterator.next()) &&
+          processingCount < this.concurrencyManager.concurrency
+        ) {
           if (uploadedChunks.has(chunk.index)) continue;
 
           processingCount++;
@@ -505,7 +508,7 @@ class HttpTransport {
 
               // 更新进度
               const progress = Math.floor((completed / totalChunks) * 100);
-              this.kernel.updateState({progress});
+              this.kernel.updateState({ progress });
 
               // 处理下一批
               processNextChunks();
@@ -640,7 +643,7 @@ class HttpTransport {
   cancel() {
     this.pause();
     this.uploadTasks.clear();
-    this.kernel.updateState({status: 'idle', progress: 0});
+    this.kernel.updateState({ status: 'idle', progress: 0 });
   }
 }
 
@@ -667,10 +670,7 @@ class AdaptiveChunkStrategy {
   getOptimalChunkSize(fileSize = 0) {
     // 如果没有网速数据，使用默认大小
     if (this.measurementCount === 0) {
-      return Math.min(
-        Math.max(this.minChunkSize, Math.ceil(fileSize / 100)),
-        this.maxChunkSize
-      );
+      return Math.min(Math.max(this.minChunkSize, Math.ceil(fileSize / 100)), this.maxChunkSize);
     }
 
     // 基于当前网速和目标上传时间计算分片大小
@@ -697,7 +697,7 @@ class SmartConcurrencyManager {
 
   async execute(task) {
     return new Promise((resolve, reject) => {
-      const execution = {task, resolve, reject};
+      const execution = { task, resolve, reject };
 
       // 加入队列
       this.pendingExecutions.push(execution);
@@ -709,15 +709,12 @@ class SmartConcurrencyManager {
 
   async processQueue() {
     // 如果没有待处理任务或已达到并发上限，直接返回
-    if (
-      this.pendingExecutions.length === 0 ||
-      this.activeRequests >= this.concurrency
-    ) {
+    if (this.pendingExecutions.length === 0 || this.activeRequests >= this.concurrency) {
       return;
     }
 
     // 获取下一个任务
-    const {task, resolve, reject} = this.pendingExecutions.shift();
+    const { task, resolve, reject } = this.pendingExecutions.shift();
 
     // 增加活跃请求计数
     this.activeRequests++;
@@ -804,7 +801,7 @@ class ChunkIterator {
 // hash-worker.ts (Web Worker文件)
 importScripts('spark-md5.min.ts');
 
-self.onmessage = function(e) {
+self.onmessage = function (e) {
   const { chunks, taskId } = e.data;
   const spark = new SparkMD5.ArrayBuffer();
 
@@ -852,7 +849,7 @@ class HashWorkerManager {
   }
 
   setupWorker() {
-    this.worker.onmessage = (e) => {
+    this.worker.onmessage = e => {
       const { type, taskId, progress, hash } = e.data;
 
       if (!this.taskQueue.has(taskId)) return;
@@ -870,7 +867,7 @@ class HashWorkerManager {
       }
     };
 
-    this.worker.onerror = (error) => {
+    this.worker.onerror = error => {
       // 所有待处理任务都失败
       for (const { reject } of this.taskQueue.values()) {
         reject(error);
@@ -899,10 +896,13 @@ class HashWorkerManager {
     const readNextChunk = () => {
       if (currentChunk * CHUNK_SIZE >= file.size) {
         // 所有分片读取完成，发送到Worker
-        this.worker.postMessage({
-          chunks,
-          taskId
-        }, chunks.map(chunk => chunk.buffer));
+        this.worker.postMessage(
+          {
+            chunks,
+            taskId
+          },
+          chunks.map(chunk => chunk.buffer)
+        );
         return;
       }
 
@@ -913,7 +913,7 @@ class HashWorkerManager {
       reader.readAsArrayBuffer(blob);
     };
 
-    reader.onload = (e) => {
+    reader.onload = e => {
       chunks.push(new Uint8Array(e.target.result));
       currentChunk++;
       readNextChunk();
@@ -980,7 +980,7 @@ class ReactiveUploader {
 
     // 连接内核事件到状态流
     this.kernel.on('stateChange', state => {
-      this._state$.next({...this._state$.value, ...state});
+      this._state$.next({ ...this._state$.value, ...state });
     });
   }
 
@@ -988,7 +988,6 @@ class ReactiveUploader {
   detectPlatform() {
     if (typeof window !== 'undefined') return new BrowserAdapter();
     if (typeof wx !== 'undefined') return new WechatAdapter();
-    if (typeof my !== 'undefined') return new AlipayAdapter();
     // 其他平台检测...
     throw new Error('不支持的运行环境');
   }
@@ -1142,14 +1141,14 @@ class WechatAdapter {
 
   // 为小程序创建分片
   createChunks(file, chunkSize) {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       // 小程序最大分片为10MB
       const maxChunkSize = Math.min(chunkSize, 10 * 1024 * 1024);
 
       // 获取文件信息
       wx.getFileInfo({
         filePath: file.path,
-        success: (res) => {
+        success: res => {
           const fileSize = res.size;
           const totalChunks = Math.ceil(fileSize / maxChunkSize);
           const chunks = [];
@@ -1239,7 +1238,7 @@ class WechatAdapter {
         method,
         data,
         header: options.headers,
-        success: (res) => {
+        success: res => {
           if (res.statusCode >= 200 && res.statusCode < 300) {
             resolve(res.data);
           } else {
@@ -1260,7 +1259,7 @@ class WechatAdapter {
         filePath,
         position: start,
         length: size,
-        success: (res) => {
+        success: res => {
           resolve(res.data);
         },
         fail: reject
@@ -1316,18 +1315,15 @@ class PlatformAdapterFactory {
       return new WechatAdapter();
     }
 
-    // 支付宝小程序
-    if (typeof my !== 'undefined' && my.uploadFile) {
-      return new AlipayAdapter();
-    }
-
     // Taro环境
     if (typeof process !== 'undefined' && process.env && process.env.TARO_ENV) {
       switch (process.env.TARO_ENV) {
-        case 'weapp': return new WechatAdapter();
-        case 'alipay': return new AlipayAdapter();
-        case 'h5': return new BrowserAdapter();
-        default: return new TaroAdapter();
+        case 'weapp':
+          return new WechatAdapter();
+        case 'h5':
+          return new BrowserAdapter();
+        default:
+          return new TaroAdapter();
       }
     }
 
@@ -1367,7 +1363,7 @@ class IndexedDBStorage extends StorageEngine {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, 1);
 
-      request.onupgradeneeded = (event) => {
+      request.onupgradeneeded = event => {
         const db = event.target.result;
 
         if (!db.objectStoreNames.contains(this.storeName)) {
@@ -1375,12 +1371,12 @@ class IndexedDBStorage extends StorageEngine {
         }
       };
 
-      request.onsuccess = (event) => {
+      request.onsuccess = event => {
         this.db = event.target.result;
         resolve();
       };
 
-      request.onerror = (event) => {
+      request.onerror = event => {
         reject(event.target.error);
       };
     });
@@ -1400,7 +1396,7 @@ class IndexedDBStorage extends StorageEngine {
       });
 
       request.onsuccess = () => resolve();
-      request.onerror = (event) => reject(event.target.error);
+      request.onerror = event => reject(event.target.error);
     });
   }
 
@@ -1413,11 +1409,11 @@ class IndexedDBStorage extends StorageEngine {
 
       const request = store.get(key);
 
-      request.onsuccess = (event) => {
+      request.onsuccess = event => {
         resolve(event.target.result ? event.target.result.data : null);
       };
 
-      request.onerror = (event) => reject(event.target.error);
+      request.onerror = event => reject(event.target.error);
     });
   }
 
@@ -1431,7 +1427,7 @@ class IndexedDBStorage extends StorageEngine {
       const request = store.delete(key);
 
       request.onsuccess = () => resolve();
-      request.onerror = (event) => reject(event.target.error);
+      request.onerror = event => reject(event.target.error);
     });
   }
 
@@ -1445,7 +1441,7 @@ class IndexedDBStorage extends StorageEngine {
       const request = store.clear();
 
       request.onsuccess = () => resolve();
-      request.onerror = (event) => reject(event.target.error);
+      request.onerror = event => reject(event.target.error);
     });
   }
 }
@@ -1484,11 +1480,13 @@ class MiniappStorage extends StorageEngine {
     return new Promise((resolve, reject) => {
       wx.getStorage({
         key: this.prefix + key,
-        success: (res) => {
+        success: res => {
           try {
             // 尝试解析JSON
-            const data = typeof res.data === 'string' && res.data.startsWith('{') ?
-              JSON.parse(res.data) : res.data;
+            const data =
+              typeof res.data === 'string' && res.data.startsWith('{')
+                ? JSON.parse(res.data)
+                : res.data;
             resolve(data);
           } catch (error) {
             resolve(res.data);
@@ -1550,14 +1548,14 @@ class SecurityManager {
 
   // 请求拦截器
   async beforeRequest(config) {
-    let updatedConfig = {...config};
+    let updatedConfig = { ...config };
 
     // 添加认证令牌
     if (this.options.tokenProvider) {
       const token = await this.getAuthToken();
       updatedConfig.headers = {
         ...updatedConfig.headers,
-        'Authorization': `Bearer ${token}`
+        Authorization: `Bearer ${token}`
       };
     }
 
@@ -1604,10 +1602,7 @@ class SecurityManager {
     const signatureString = `${method.toUpperCase()}\n${url}\n${timestamp}`;
 
     // 使用HMAC签名
-    const key = await this.cryptoHelper.importKey(
-      this.options.signatureKey,
-      'HMAC'
-    );
+    const key = await this.cryptoHelper.importKey(this.options.signatureKey, 'HMAC');
 
     const signature = await crypto.subtle.sign(
       'HMAC',
@@ -1632,10 +1627,7 @@ class SecurityManager {
     const serialized = typeof data === 'string' ? data : JSON.stringify(data);
 
     // 加密
-    const encrypted = await this.cryptoHelper.encrypt(
-      serialized,
-      iv
-    );
+    const encrypted = await this.cryptoHelper.encrypt(serialized, iv);
 
     return {
       data: encrypted,
@@ -1673,9 +1665,8 @@ class CryptoHelper {
     }
 
     // 导入算法配置
-    const importAlgorithm = algorithm === 'HMAC' ?
-      { name: 'HMAC', hash: 'SHA-256' } :
-      { name: 'AES-GCM' };
+    const importAlgorithm =
+      algorithm === 'HMAC' ? { name: 'HMAC', hash: 'SHA-256' } : { name: 'AES-GCM' };
 
     // 导入密钥
     return crypto.subtle.importKey(
@@ -1764,12 +1755,9 @@ class FileIntegrityChecker {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
 
-      reader.onload = async (e) => {
+      reader.onload = async e => {
         try {
-          const hashBuffer = await crypto.subtle.digest(
-            algorithm,
-            e.target.result
-          );
+          const hashBuffer = await crypto.subtle.digest(algorithm, e.target.result);
 
           // 转换为十六进制字符串
           const hashArray = Array.from(new Uint8Array(hashBuffer));
@@ -1797,7 +1785,7 @@ class FileIntegrityChecker {
       let currentChunk = 0;
       const chunks = Math.ceil(file.size / chunkSize);
 
-      fileReader.onload = (e) => {
+      fileReader.onload = e => {
         spark.append(e.target.result);
         currentChunk++;
 
@@ -1980,9 +1968,17 @@ class CompressionManager {
 
     // 一些文件类型已经是压缩格式，不需要再压缩
     const compressedTypes = [
-      'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-      'audio/mp3', 'audio/ogg', 'video/mp4', 'video/webm',
-      'application/zip', 'application/gzip', 'application/x-rar-compressed',
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'audio/mp3',
+      'audio/ogg',
+      'video/mp4',
+      'video/webm',
+      'application/zip',
+      'application/gzip',
+      'application/x-rar-compressed',
       'application/pdf'
     ];
 
@@ -2129,12 +2125,10 @@ class EdgeNetworkManager {
 
   // Ping所有节点测试延迟
   async pingAllNodes() {
-    const results = await Promise.all(
-      this.options.edgeNodes.map(node => this.pingNode(node))
-    );
+    const results = await Promise.all(this.options.edgeNodes.map(node => this.pingNode(node)));
 
     // 更新状态
-    results.forEach(({node, rtt, status}) => {
+    results.forEach(({ node, rtt, status }) => {
       this.edgeStatus.set(node.url, {
         rtt,
         status,
@@ -2355,12 +2349,11 @@ class ErrorHandler {
   // 计算退避时间
   calculateBackoff(retryCount) {
     // 基础退避时间 = 初始延迟 * (退避因子 ^ 重试次数)
-    const baseDelay = this.options.initialRetryDelay *
-                     Math.pow(this.options.retryBackoffFactor, retryCount);
+    const baseDelay =
+      this.options.initialRetryDelay * Math.pow(this.options.retryBackoffFactor, retryCount);
 
     // 添加抖动，避免雪崩
-    const jitterFactor = 1 - this.options.jitter +
-                        (Math.random() * this.options.jitter * 2);
+    const jitterFactor = 1 - this.options.jitter + Math.random() * this.options.jitter * 2;
 
     // 最终延迟 = 基础延迟 * 抖动因子，但不超过最大延迟
     return Math.min(baseDelay * jitterFactor, this.options.maxRetryDelay);
@@ -2442,7 +2435,7 @@ class ErrorHandler {
 
       // 获取已有的失败记录
       const failedChunksKey = `failed_chunks_${fileHash}`;
-      let failedChunks = await storage.get(failedChunksKey) || [];
+      let failedChunks = (await storage.get(failedChunksKey)) || [];
 
       // 添加新的失败记录
       failedChunks.push({
@@ -2529,25 +2522,28 @@ class EnhancedHttpTransport extends HttpTransport {
 
 // 使用示例
 const uploader = new FileChunkKernel()
-  .registerModule('transport', new EnhancedHttpTransport({
-    target: '/api/upload',
-    chunkSize: 5 * 1024 * 1024,
-    concurrency: 3,
-    errorHandling: {
-      maxRetries: 5,
-      retryBackoffFactor: 1.5,
-      errorReportingEnabled: true
-    }
-  }))
+  .registerModule(
+    'transport',
+    new EnhancedHttpTransport({
+      target: '/api/upload',
+      chunkSize: 5 * 1024 * 1024,
+      concurrency: 3,
+      errorHandling: {
+        maxRetries: 5,
+        retryBackoffFactor: 1.5,
+        errorReportingEnabled: true
+      }
+    })
+  )
   .registerModule('platform', new BrowserAdapter());
 
 // 监听重试事件
-uploader.on('retry', (data) => {
+uploader.on('retry', data => {
   console.log(`重试上传: 第${data.retryCount}次, 延迟${data.delay}ms, 错误类型: ${data.errorType}`);
 });
 
 // 监听特定错误类型
-uploader.on('networkError', (data) => {
+uploader.on('networkError', data => {
   console.warn('网络错误:', data.error.message);
   // 可以在这里显示网络连接提示
 });
@@ -2559,9 +2555,9 @@ uploader.on('networkError', (data) => {
 class UploadQueueManager {
   constructor(options = {}) {
     this.options = {
-      maxQueueSize: 100,  // 队列最大长度
+      maxQueueSize: 100, // 队列最大长度
       persistQueue: true, // 是否持久化队列
-      autoResume: true,   // 网络恢复时自动继续
+      autoResume: true, // 网络恢复时自动继续
       queueKey: 'filechunk_upload_queue',
       processingKey: 'filechunk_processing',
       ...options
@@ -2720,7 +2716,7 @@ class UploadQueueManager {
       const platform = this.kernel.getModule('platform');
 
       // 注册进度回调
-      const progressHandler = (progress) => {
+      const progressHandler = progress => {
         nextItem.progress = progress;
         this.emitEvent('uploadProgress', { id: nextItem.id, progress });
       };
@@ -2970,7 +2966,7 @@ class UploadQueueManager {
   async restoreQueue() {
     try {
       // 恢复队列
-      const savedQueue = await this.storage.get(this.options.queueKey) || [];
+      const savedQueue = (await this.storage.get(this.options.queueKey)) || [];
 
       // 恢复正在处理的项目
       const processingItem = await this.storage.get(this.options.processingKey);
@@ -3078,20 +3074,26 @@ class UploadQueueManager {
 
 // 使用示例
 const uploader = new FileChunkKernel()
-  .registerModule('transport', new HttpTransport({
-    target: '/api/upload',
-    chunkSize: 5 * 1024 * 1024
-  }))
+  .registerModule(
+    'transport',
+    new HttpTransport({
+      target: '/api/upload',
+      chunkSize: 5 * 1024 * 1024
+    })
+  )
   .registerModule('platform', new BrowserAdapter())
   .registerModule('storage', new IndexedDBStorage())
-  .registerModule('queueManager', new UploadQueueManager({
-    persistQueue: true,
-    autoResume: true
-  }));
+  .registerModule(
+    'queueManager',
+    new UploadQueueManager({
+      persistQueue: true,
+      autoResume: true
+    })
+  );
 
 // 批量上传文件
 const inputElement = document.getElementById('file-input');
-inputElement.addEventListener('change', async (event) => {
+inputElement.addEventListener('change', async event => {
   const files = Array.from(event.target.files);
 
   const queueManager = uploader.getModule('queueManager');
@@ -3104,7 +3106,7 @@ inputElement.addEventListener('change', async (event) => {
 });
 
 // 监听队列状态变化
-queueManager.on('queueUpdated', (state) => {
+queueManager.on('queueUpdated', state => {
   console.log('队列状态:', state);
   updateUIWithQueueState(state);
 });
@@ -3135,12 +3137,13 @@ queueManager.on('networkOnline', () => {
 class PreUploadInspector {
   constructor(options = {}) {
     this.options = {
-      enableMimeDetection: true,         // 启用MIME类型检测
-      enableContentScanning: true,       // 启用内容预检
-      enableVirusScan: false,            // 启用病毒扫描
-      scanSizeLimit: 50 * 1024 * 1024,   // 内容检测大小限制(50MB)
-      trustedMimeTypes: [],              // 信任的MIME类型列表
-      disallowedFileTypes: [             // 禁止的文件类型
+      enableMimeDetection: true, // 启用MIME类型检测
+      enableContentScanning: true, // 启用内容预检
+      enableVirusScan: false, // 启用病毒扫描
+      scanSizeLimit: 50 * 1024 * 1024, // 内容检测大小限制(50MB)
+      trustedMimeTypes: [], // 信任的MIME类型列表
+      disallowedFileTypes: [
+        // 禁止的文件类型
         'application/x-msdownload',
         'application/x-executable',
         'application/x-dosexec',
@@ -3148,9 +3151,20 @@ class PreUploadInspector {
         'application/bat',
         'application/cmd'
       ],
-      highRiskExtensions: [              // 高风险扩展名
-        '.exe', '.dll', '.bat', '.cmd', '.vbs', '.js',
-        '.ws', '.wsf', '.msi', '.jsp', '.php', '.pif'
+      highRiskExtensions: [
+        // 高风险扩展名
+        '.exe',
+        '.dll',
+        '.bat',
+        '.cmd',
+        '.vbs',
+        '.js',
+        '.ws',
+        '.wsf',
+        '.msi',
+        '.jsp',
+        '.php',
+        '.pif'
       ],
       // 外部病毒扫描API
       scanApiEndpoint: null,
@@ -3160,29 +3174,50 @@ class PreUploadInspector {
 
     // 文件签名数据库 (前几个字节的特征码)
     this.fileSignatures = [
-      { type: 'image/jpeg', signature: [0xFF, 0xD8, 0xFF], extension: '.jpg' },
-      { type: 'image/png', signature: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A], extension: '.png' },
+      { type: 'image/jpeg', signature: [0xff, 0xd8, 0xff], extension: '.jpg' },
+      {
+        type: 'image/png',
+        signature: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+        extension: '.png'
+      },
       { type: 'image/gif', signature: [0x47, 0x49, 0x46, 0x38], extension: '.gif' },
       { type: 'image/webp', signature: [0x52, 0x49, 0x46, 0x46], extension: '.webp' },
       { type: 'application/pdf', signature: [0x25, 0x50, 0x44, 0x46], extension: '.pdf' },
-      { type: 'application/zip', signature: [0x50, 0x4B, 0x03, 0x04], extension: '.zip' },
+      { type: 'application/zip', signature: [0x50, 0x4b, 0x03, 0x04], extension: '.zip' },
       { type: 'audio/mpeg', signature: [0x49, 0x44, 0x33], extension: '.mp3' },
-      { type: 'video/mp4', signature: [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70], offset: 4, extension: '.mp4' },
-      { type: 'application/x-msdownload', signature: [0x4D, 0x5A], extension: '.exe' },
-      { type: 'application/x-msdos-program', signature: [0x4D, 0x5A], extension: '.exe' },
-      { type: 'application/vnd.microsoft.portable-executable', signature: [0x4D, 0x5A], extension: '.exe' }
+      {
+        type: 'video/mp4',
+        signature: [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70],
+        offset: 4,
+        extension: '.mp4'
+      },
+      { type: 'application/x-msdownload', signature: [0x4d, 0x5a], extension: '.exe' },
+      { type: 'application/x-msdos-program', signature: [0x4d, 0x5a], extension: '.exe' },
+      {
+        type: 'application/vnd.microsoft.portable-executable',
+        signature: [0x4d, 0x5a],
+        extension: '.exe'
+      }
     ];
 
     // 基于内容的有害模式检测器
     this.maliciousPatterns = [
       // 脚本注入模式
-      { pattern: /<script>|<\/script>|javascript:|eval\(|document\.cookie/i, risk: 'high', type: 'xss' },
+      {
+        pattern: /<script>|<\/script>|javascript:|eval\(|document\.cookie/i,
+        risk: 'high',
+        type: 'xss'
+      },
       // SQL注入模式
       { pattern: /(\%27)|(\')|(\-\-)|(\%23)|(#)/i, risk: 'high', type: 'sql-injection' },
       // 命令注入模式
       { pattern: /\&\s*\w+\s*\;|\|\s*\w+\s*\|/i, risk: 'high', type: 'command-injection' },
       // 敏感文件标记
-      { pattern: /confidential|password|secret|private key/i, risk: 'medium', type: 'sensitive-data' }
+      {
+        pattern: /confidential|password|secret|private key/i,
+        risk: 'medium',
+        type: 'sensitive-data'
+      }
     ];
   }
 
@@ -3373,8 +3408,12 @@ class PreUploadInspector {
 
     // 只扫描文本类文件
     const textTypes = [
-      'text/', 'application/json', 'application/javascript', 'application/xml',
-      'application/x-httpd-php', 'application/xhtml+xml'
+      'text/',
+      'application/json',
+      'application/javascript',
+      'application/xml',
+      'application/x-httpd-php',
+      'application/xhtml+xml'
     ];
 
     // 检查文件类型是否应该扫描
@@ -3446,7 +3485,7 @@ class PreUploadInspector {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
 
-      reader.onload = (e) => {
+      reader.onload = e => {
         const arrayBuffer = e.target.result;
         const bytes = new Uint8Array(arrayBuffer);
         resolve(bytes);
@@ -3465,7 +3504,7 @@ class PreUploadInspector {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
 
-      reader.onload = (e) => {
+      reader.onload = e => {
         resolve(e.target.result);
       };
 
@@ -3496,19 +3535,25 @@ class PreUploadInspector {
 
 // 使用示例
 const uploader = new FileChunkKernel()
-  .registerModule('transport', new HttpTransport({
-    target: '/api/upload',
-    chunkSize: 5 * 1024 * 1024
-  }))
+  .registerModule(
+    'transport',
+    new HttpTransport({
+      target: '/api/upload',
+      chunkSize: 5 * 1024 * 1024
+    })
+  )
   .registerModule('platform', new BrowserAdapter())
-  .registerModule('inspector', new PreUploadInspector({
-    enableMimeDetection: true,
-    enableContentScanning: true,
-    enableVirusScan: false
-  }));
+  .registerModule(
+    'inspector',
+    new PreUploadInspector({
+      enableMimeDetection: true,
+      enableContentScanning: true,
+      enableVirusScan: false
+    })
+  );
 
 // 在上传前进行检查
-uploader.on('beforeUpload', async (file) => {
+uploader.on('beforeUpload', async file => {
   const inspector = uploader.getModule('inspector');
   const inspectionResult = await inspector.inspectFile(file);
 
@@ -3525,8 +3570,7 @@ uploader.on('beforeUpload', async (file) => {
   }
 
   // 如果检测到MIME类型与声明不一致，使用检测到的类型
-  if (inspectionResult.detectedMimeType &&
-      inspectionResult.detectedMimeType !== file.type) {
+  if (inspectionResult.detectedMimeType && inspectionResult.detectedMimeType !== file.type) {
     console.log(`文件实际类型: ${inspectionResult.detectedMimeType}, 声明类型: ${file.type}`);
   }
 
@@ -3534,7 +3578,7 @@ uploader.on('beforeUpload', async (file) => {
 });
 
 // 处理检查失败
-uploader.on('error', (error) => {
+uploader.on('error', error => {
   if (error.inspectionResult) {
     // 显示安全检查失败原因
     alert(`文件安全检查失败: ${error.inspectionResult.reasons.join(', ')}`);
@@ -3547,26 +3591,26 @@ uploader.on('error', (error) => {
 
 ## 十五、性能比较
 
-| 特性                | FileChunk Pro     | 传统实现       | 优势说明                               |
-|---------------------|-------------------|---------------|----------------------------------------|
-| 分片大小动态调整    | ✓                 | ✗             | 根据网络自动优化，提高20-50%传输效率    |
-| Web Worker支持      | 内置默认          | 可选手动      | 避免UI阻塞，大文件哈希计算提速3-5倍     |
-| 自适应并发控制      | ✓                 | ✗             | 动态调整并发数，吞吐量提升30-80%        |
-| 跨平台支持          | 全平台微内核      | 部分平台      | 一套代码全场景兼容                     |
-| 响应式编程支持      | ✓                 | ✗             | 与现代框架无缝集成                     |
-| 内存占用            | <50MB (10GB文件)  | >500MB        | 迭代器模式，超大文件内存占用降低90%     |
-| 安装包大小          | 18KB (gzip)       | 50-100KB      | 微内核+按需加载，体积减少60%            |
-| 断点续传成功率      | >99.9%            | 90-95%        | 分布式存储+增强校验                    |
-| 小程序大文件支持    | 突破100MB限制     | 受限制        | 智能分片+文件系统优化                  |
+| 特性             | FileChunk Pro    | 传统实现 | 优势说明                             |
+| ---------------- | ---------------- | -------- | ------------------------------------ |
+| 分片大小动态调整 | ✓                | ✗        | 根据网络自动优化，提高20-50%传输效率 |
+| Web Worker支持   | 内置默认         | 可选手动 | 避免UI阻塞，大文件哈希计算提速3-5倍  |
+| 自适应并发控制   | ✓                | ✗        | 动态调整并发数，吞吐量提升30-80%     |
+| 跨平台支持       | 全平台微内核     | 部分平台 | 一套代码全场景兼容                   |
+| 响应式编程支持   | ✓                | ✗        | 与现代框架无缝集成                   |
+| 内存占用         | <50MB (10GB文件) | >500MB   | 迭代器模式，超大文件内存占用降低90%  |
+| 安装包大小       | 18KB (gzip)      | 50-100KB | 微内核+按需加载，体积减少60%         |
+| 断点续传成功率   | >99.9%           | 90-95%   | 分布式存储+增强校验                  |
+| 小程序大文件支持 | 突破100MB限制    | 受限制   | 智能分片+文件系统优化                |
 
 ## 十六、使用场景对比
 
-| 平台          | 使用示例                    | 文件限制     | 性能特点                           |
-|--------------|----------------------------|------------|----------------------------------|
-| 浏览器        | 企业级文件管理系统          | 20GB       | 全内存优化，吞吐量最大化           |
-| 微信小程序    | 高清视频上传                | 2GB*       | 低内存环境优化，文件系统优化       |
-| React Native | 跨平台媒体应用              | 无限制      | 原生桥接，高效缓存                |
-| Node.js环境  | 服务端中转上传              | 无限制      | 流式处理，超低内存占用            |
-| 弱网环境      | 远程医疗影像传输            | 无限制      | 智能分片+断点续传+压缩            |
+| 平台         | 使用示例           | 文件限制 | 性能特点                     |
+| ------------ | ------------------ | -------- | ---------------------------- |
+| 浏览器       | 企业级文件管理系统 | 20GB     | 全内存优化，吞吐量最大化     |
+| 微信小程序   | 高清视频上传       | 2GB\*    | 低内存环境优化，文件系统优化 |
+| React Native | 跨平台媒体应用     | 无限制   | 原生桥接，高效缓存           |
+| Node.js环境  | 服务端中转上传     | 无限制   | 流式处理，超低内存占用       |
+| 弱网环境     | 远程医疗影像传输   | 无限制   | 智能分片+断点续传+压缩       |
 
 \*通过特殊优化技术突破小程序文件大小限制

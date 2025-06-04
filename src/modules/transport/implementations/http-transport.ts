@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { FileChunk } from '../interfaces';
 import { BaseModule } from '../../../core/module-base';
+import { PlatformAdapter } from '../../../platforms/platform-base';
 import { ChunkStrategy } from '../chunk-strategy';
 import { ConcurrencyManager } from '../concurrency-manager';
 import { ChunkIterator } from '../chunk-iterator';
-import { PlatformAdapter } from '../../../platforms/platform-base';
 
 /**
  * HTTP传输模块选项
@@ -254,8 +254,8 @@ export class HttpTransport extends BaseModule {
    */
   async uploadFile(file: File): Promise<string> {
     // 获取平台适配器
-    //TODO: 需要优化 暂时绕过类型检查 当PlatformAdapter完善后需要修改这里
-    const platform = this.getModule('platform') as unknown as PlatformAdapter;
+    const platformModule = this.getModule('platform');
+    const platform = platformModule as unknown as PlatformAdapter;
 
     try {
       // 生成上传任务ID
@@ -289,8 +289,9 @@ export class HttpTransport extends BaseModule {
       let fileHash: string;
 
       // 尝试从平台适配器获取哈希计算功能
-      if (typeof platform.calculateHash === 'function') {
-        fileHash = await platform.calculateHash(file);
+      if (typeof platform.getFileInfo === 'function') {
+        const fileInfo = await platform.getFileInfo(file);
+        fileHash = `${fileInfo.name}_${fileInfo.size}_${fileInfo.lastModified}`;
         this.emit('transport:hashComplete', { hash: fileHash, taskId });
       } else {
         // 使用默认哈希方法（基于文件名和大小的简单哈希）
@@ -428,6 +429,11 @@ export class HttpTransport extends BaseModule {
 
   /**
    * 上传文件分片
+   * @param chunkIterator 分片迭代器
+   * @param uploadedChunks 已上传的分片集合
+   * @param fileHash 文件哈希值
+   * @param platform 平台适配器
+   * @param taskId 任务ID
    */
   private async uploadChunks(
     chunkIterator: ChunkIterator,
@@ -641,6 +647,12 @@ export class HttpTransport extends BaseModule {
 
   /**
    * 上传单个分片
+   * @param chunk 文件分片
+   * @param hash 文件哈希值
+   * @param totalChunks 总分片数
+   * @param platform 平台适配器
+   * @param signal 中止信号
+   * @param taskId 任务ID
    */
   private async uploadChunk(
     chunk: FileChunk,
@@ -706,6 +718,10 @@ export class HttpTransport extends BaseModule {
 
   /**
    * 检查文件是否已存在
+   * @param hash 文件哈希值
+   * @param file 文件对象
+   * @param platform 平台适配器
+   * @returns 检查结果，包含是否存在、URL和已上传分片信息
    */
   private async checkFileExists(
     hash: string,
@@ -777,7 +793,12 @@ export class HttpTransport extends BaseModule {
   }
 
   /**
-   * 合并请求处理
+   * 合并文件分片
+   * @param hash 文件哈希值
+   * @param totalChunks 总分片数
+   * @param fileName 文件名
+   * @param platform 平台适配器
+   * @returns 合并结果，包含文件URL
    */
   private async mergeChunks(
     hash: string,

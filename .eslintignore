@@ -1,0 +1,2 @@
+# 忽略React Native适配器的require警告
+src/platforms/native/react-native-adapter.ts 

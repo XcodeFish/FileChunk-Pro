@@ -69,6 +69,7 @@
     "@types/jest": "^29.5.14",
     "@types/node": "^22.15.29",
     "@types/pako": "^2.0.3",
+    "@types/react-native": "^0.73.0",
     "@types/spark-md5": "^3.0.5",
     "@typescript-eslint/eslint-plugin": "^8.33.1",
     "@typescript-eslint/parser": "^8.33.1",
@@ -95,6 +96,7 @@
     "spark-md5": "^3.0.2"
   },
   "peerDependencies": {
+    "react-native": ">=0.60.0",
     "rxjs": "^7.5.0"
   },
   "engines": {

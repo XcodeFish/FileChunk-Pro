@@ -1,5 +1,21 @@
 /**
- * 核心模块导出
+ * 核心模块导出文件
  */
 
-// 后续添加核心模块导出
+// 导出微内核
+export { Kernel, KernelOptions, KernelEventType } from './kernel';
+
+// 导出模块基类
+export { BaseModule } from './module-base';
+
+// 导出模块注册中心
+export { ModuleRegistryImpl } from './module-registry';
+
+// 导出事件总线
+export { EventBusImpl } from './event-bus';
+
+// 重导出模块类型定义
+export * from '../types/modules';
+
+// 重导出事件类型定义
+export * from '../types/events';

@@ -46,16 +46,16 @@
     "react",
     "vue"
   ],
-  "author": "",
+  "author": "codefish",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourusername/filechunk-pro.git"
+    "url": "https://github.com/XcodeFish/FileChunk-Pro.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/filechunk-pro/issues"
+    "url": "https://github.com/XcodeFish/FileChunk-Pro/issues"
   },
-  "homepage": "https://github.com/yourusername/filechunk-pro#readme",
+  "homepage": "https://github.com/XcodeFish/FileChunk-Pro#readme",
   "packageManager": "pnpm@10.8.0",
   "devDependencies": {
     "@babel/core": "^7.27.4",

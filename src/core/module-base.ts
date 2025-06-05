@@ -1,12 +1,26 @@
-import { Module, ModuleMetadata, ModuleStatus, ModuleLifecycleError } from '../types/modules';
-import { EventBusImpl } from './event-bus';
+import { ModuleMetadata, ModuleStatus, ModuleLifecycleError } from '../types/modules';
+import { Module as ModuleInterface } from '../types/modules';
+import { EventEmitter } from './event-bus';
+import { Kernel } from './kernel';
+
+/**
+ * 模块接口定义
+ * 所有功能模块必须实现此接口
+ */
+export interface Module {
+  /**
+   * 初始化模块
+   * @param kernel 微内核实例
+   */
+  init(kernel: Kernel): void;
+}
 
 /**
  * 模块基类
  *
  * 提供模块的核心功能和生命周期管理，所有具体模块应继承此类
  */
-export abstract class BaseModule implements Module {
+export abstract class BaseModule implements ModuleInterface {
   /**
    * 模块元数据
    */
@@ -27,17 +41,17 @@ export abstract class BaseModule implements Module {
   /**
    * 依赖注入容器
    */
-  protected _kernel?: any; // 将在Kernel类完成后替换为具体类型
+  protected _kernel?: Kernel;
 
   /**
    * 事件总线实例
    */
-  protected _eventBus?: EventBusImpl;
+  protected _eventBus?: EventEmitter;
 
   /**
    * 模块配置
    */
-  protected _config: Record<string, any> = {};
+  protected _config: Record<string, unknown> = {};
 
   /**
    * 构造函数
@@ -45,7 +59,7 @@ export abstract class BaseModule implements Module {
    * @param metadata - 模块元数据
    * @param config - 模块配置（可选）
    */
-  constructor(metadata: ModuleMetadata, config?: Record<string, any>) {
+  constructor(metadata: ModuleMetadata, config?: Record<string, unknown>) {
     this.validateMetadata(metadata);
     this.metadata = { ...metadata };
 
@@ -88,7 +102,7 @@ export abstract class BaseModule implements Module {
    *
    * @param kernel - 内核实例
    */
-  setKernel(kernel: any): void {
+  setKernel(kernel: Kernel): void {
     this._kernel = kernel;
   }
 
@@ -97,7 +111,7 @@ export abstract class BaseModule implements Module {
    *
    * @param eventBus - 事件总线实例
    */
-  setEventBus(eventBus: EventBusImpl): void {
+  setEventBus(eventBus: EventEmitter): void {
     this._eventBus = eventBus;
   }
 
@@ -122,22 +136,22 @@ export abstract class BaseModule implements Module {
    * @param defaultValue - 默认值，当配置不存在时返回
    * @returns 配置值或默认值
    */
-  getConfig<T>(path?: string, defaultValue?: T): T | Record<string, any> {
+  getConfig<T>(path?: string, defaultValue?: T): T | Record<string, unknown> {
     if (!path) {
       return this._config as T;
     }
 
     const keys = path.split('.');
-    let current: any = this._config;
+    let current: unknown = this._config;
 
     for (const key of keys) {
       if (current === undefined || current === null || typeof current !== 'object') {
         return defaultValue as T;
       }
-      current = current[key];
+      current = (current as Record<string, unknown>)[key];
     }
 
-    return current !== undefined ? current : (defaultValue as T);
+    return current !== undefined ? (current as T) : (defaultValue as T);
   }
 
   /**
@@ -146,7 +160,7 @@ export abstract class BaseModule implements Module {
    * @param config - 新的配置，将与现有配置合并
    * @param notify - 是否发送配置变更事件，默认为true
    */
-  updateConfig(config: Record<string, any>, notify: boolean = true): void {
+  updateConfig(config: Record<string, unknown>, notify: boolean = true): void {
     this._config = this._mergeConfig(this._config, config);
 
     if (notify && this._eventBus) {
@@ -165,9 +179,9 @@ export abstract class BaseModule implements Module {
    * @returns 合并后的配置
    */
   private _mergeConfig(
-    target: Record<string, any>,
-    source: Record<string, any>
-  ): Record<string, any> {
+    target: Record<string, unknown>,
+    source: Record<string, unknown>
+  ): Record<string, unknown> {
     const result = { ...target };
 
     for (const key in source) {
@@ -184,7 +198,10 @@ export abstract class BaseModule implements Module {
           !Array.isArray(targetValue) &&
           !Array.isArray(sourceValue)
         ) {
-          result[key] = this._mergeConfig(targetValue, sourceValue);
+          result[key] = this._mergeConfig(
+            targetValue as Record<string, unknown>,
+            sourceValue as Record<string, unknown>
+          );
         } else {
           // 否则直接替换
           result[key] = sourceValue;
@@ -197,35 +214,33 @@ export abstract class BaseModule implements Module {
 
   /**
    * 初始化模块
-   * 子类应重写此方法以实现具体初始化逻辑
+   * 遵循types/modules.ts中的接口定义
    */
-  async init(): Promise<void> {
-    if (this._status !== ModuleStatus.REGISTERED) {
-      throw new ModuleLifecycleError(
-        `模块${this.metadata.id}无法初始化：当前状态为${this._status}`,
-        this.metadata.id,
-        'init'
-      );
-    }
+  init(): Promise<void> | void {
+    // 初始化基本逻辑
+    this._status = ModuleStatus.INITIALIZING;
 
     try {
-      this._status = ModuleStatus.INITIALIZING;
+      // 调用初始化钩子
+      this.onInit();
 
-      // 初始化前钩子
-      await this.onBeforeInit();
-
-      // 主初始化逻辑
-      await this.onInit();
-
-      // 初始化后钩子
-      await this.onAfterInit();
-
+      // 更新状态
       this._status = ModuleStatus.INITIALIZED;
+
+      return Promise.resolve();
     } catch (error) {
       this._status = ModuleStatus.ERROR;
-      this.onError(error instanceof Error ? error : new Error(String(error)));
+      this.onError(error as Error);
       throw error;
     }
+  }
+
+  /**
+   * 初始化完成后执行的钩子
+   * 子类可以重写此方法以添加自定义初始化逻辑
+   */
+  protected onInit(): void {
+    // 空实现，子类可以重写
   }
 
   /**
@@ -256,14 +271,13 @@ export abstract class BaseModule implements Module {
       this._status = ModuleStatus.RUNNING;
     } catch (error) {
       this._status = ModuleStatus.ERROR;
-      this.onError(error instanceof Error ? error : new Error(String(error)));
+      this.onError(error as Error);
       throw error;
     }
   }
 
   /**
    * 停止模块
-   * 子类应重写此方法以实现具体停止逻辑
    */
   async stop(): Promise<void> {
     if (this._status !== ModuleStatus.RUNNING) {
@@ -289,14 +303,13 @@ export abstract class BaseModule implements Module {
       this._status = ModuleStatus.STOPPED;
     } catch (error) {
       this._status = ModuleStatus.ERROR;
-      this.onError(error instanceof Error ? error : new Error(String(error)));
+      this.onError(error as Error);
       throw error;
     }
   }
 
   /**
    * 销毁模块
-   * 子类应重写此方法以实现具体销毁逻辑
    */
   async destroy(): Promise<void> {
     if (this._status === ModuleStatus.RUNNING) {
@@ -316,18 +329,17 @@ export abstract class BaseModule implements Module {
       this._status = ModuleStatus.REGISTERED;
     } catch (error) {
       this._status = ModuleStatus.ERROR;
-      this.onError(error instanceof Error ? error : new Error(String(error)));
+      this.onError(error as Error);
       throw error;
     }
   }
 
   /**
-   * 错误处理方法
-   *
+   * 错误处理器
    * @param error - 捕获的错误
    */
   onError(error: Error): void {
-    console.error(`模块 ${this.metadata.id} 发生错误:`, error);
+    console.error(`模块 ${this.metadata.id} 错误:`, error);
 
     if (this._eventBus) {
       this._eventBus.emit('module.error', {
@@ -338,187 +350,137 @@ export abstract class BaseModule implements Module {
   }
 
   /**
-   * 订阅事件
-   *
-   * @param eventName 事件名称
-   * @param handler 事件处理器
-   * @returns 订阅ID，用于取消订阅
+   * 保护方法：注册事件监听器
+   * @param eventName - 事件名称
+   * @param handler - 事件处理函数
+   * @returns 订阅ID，可用于取消订阅
    */
-  protected on<T>(eventName: string, handler: (data: T) => void): string {
-    if (!this._eventBus) {
-      throw new Error(`模块${this.metadata.id}尚未绑定事件总线，无法订阅事件`);
+  protected on<T>(eventName: string, handler: (data: T) => void): void {
+    if (this._eventBus) {
+      this._eventBus.on(eventName, handler);
+    } else {
+      console.warn(`模块 ${this.metadata.id} 没有事件总线，无法注册事件: ${eventName}`);
     }
-    return this._eventBus.on(eventName, handler, { subscriberId: this.metadata.id });
   }
 
   /**
-   * 订阅一次性事件
-   *
-   * @param eventName 事件名称
-   * @param handler 事件处理器
-   * @returns 订阅ID，用于取消订阅
+   * 保护方法：注册一次性事件监听器
+   * @param eventName - 事件名称
+   * @param handler - 事件处理函数
+   * @returns 订阅ID，可用于取消订阅
    */
-  protected once<T>(eventName: string, handler: (data: T) => void): string {
-    if (!this._eventBus) {
-      throw new Error(`模块${this.metadata.id}尚未绑定事件总线，无法订阅事件`);
+  protected once<T>(eventName: string, handler: (data: T) => void): void {
+    if (this._eventBus) {
+      this._eventBus.once(eventName, handler);
+    } else {
+      console.warn(`模块 ${this.metadata.id} 没有事件总线，无法注册事件: ${eventName}`);
     }
-    return this._eventBus.once(eventName, handler, { subscriberId: this.metadata.id });
   }
 
   /**
-   * 发布事件
-   *
-   * @param eventName 事件名称
-   * @param eventData 事件数据
+   * 保护方法：发布事件
+   * @param eventName - 事件名称
+   * @param eventData - 事件数据
    */
   protected emit<T>(eventName: string, eventData: T): void {
-    if (!this._eventBus) {
-      throw new Error(`模块${this.metadata.id}尚未绑定事件总线，无法发布事件`);
+    if (this._eventBus) {
+      this._eventBus.emit(eventName, eventData);
+    } else {
+      console.warn(`模块 ${this.metadata.id} 没有事件总线，无法发布事件: ${eventName}`);
     }
-    this._eventBus.emit(eventName, eventData);
-  }
-
-  /**
-   * 异步发布事件
-   *
-   * @param eventName 事件名称
-   * @param eventData 事件数据
-   * @returns Promise，解析为处理结果数组
-   */
-  protected async emitAsync<T>(eventName: string, eventData: T): Promise<void[]> {
-    if (!this._eventBus) {
-      throw new Error(`模块${this.metadata.id}尚未绑定事件总线，无法发布事件`);
-    }
-    return this._eventBus.emitAsync(eventName, eventData);
-  }
-
-  /**
-   * 初始化前钩子
-   * 子类可重写此方法以实现初始化前的准备工作
-   */
-  protected async onBeforeInit(): Promise<void> {
-    // 默认实现为空，由子类重写
-  }
-
-  /**
-   * 初始化钩子
-   * 子类应重写此方法以实现具体初始化逻辑
-   */
-  protected async onInit(): Promise<void> {
-    // 默认实现为空，由子类重写
-  }
-
-  /**
-   * 初始化后钩子
-   * 子类可重写此方法以实现初始化后的清理工作
-   */
-  protected async onAfterInit(): Promise<void> {
-    // 默认实现为空，由子类重写
   }
 
   /**
    * 启动前钩子
-   * 子类可重写此方法以实现启动前的准备工作
    */
   protected async onBeforeStart(): Promise<void> {
-    // 默认实现为空，由子类重写
+    // 空实现，子类可以重写
   }
 
   /**
-   * 启动钩子
-   * 子类应重写此方法以实现具体启动逻辑
+   * 启动主逻辑钩子
    */
   protected async onStart(): Promise<void> {
-    // 默认实现为空，由子类重写
+    // 空实现，子类可以重写
   }
 
   /**
    * 启动后钩子
-   * 子类可重写此方法以实现启动后的清理或初始化工作
    */
   protected async onAfterStart(): Promise<void> {
-    // 默认实现为空，由子类重写
+    // 空实现，子类可以重写
   }
 
   /**
    * 停止前钩子
-   * 子类可重写此方法以实现停止前的准备工作
    */
   protected async onBeforeStop(): Promise<void> {
-    // 默认实现为空，由子类重写
+    // 空实现，子类可以重写
   }
 
   /**
-   * 停止钩子
-   * 子类应重写此方法以实现具体停止逻辑
+   * 停止主逻辑钩子
    */
   protected async onStop(): Promise<void> {
-    // 默认实现为空，由子类重写
+    // 空实现，子类可以重写
   }
 
   /**
    * 停止后钩子
-   * 子类可重写此方法以实现停止后的清理工作
    */
   protected async onAfterStop(): Promise<void> {
-    // 默认实现为空，由子类重写
+    // 空实现，子类可以重写
   }
 
   /**
    * 销毁前钩子
-   * 子类可重写此方法以实现销毁前的准备工作
    */
   protected async onBeforeDestroy(): Promise<void> {
-    // 默认实现为空，由子类重写
+    // 空实现，子类可以重写
   }
 
   /**
-   * 销毁钩子
-   * 子类应重写此方法以实现具体销毁逻辑
+   * 销毁主逻辑钩子
    */
   protected async onDestroy(): Promise<void> {
-    // 默认实现为空，由子类重写
+    // 空实现，子类可以重写
   }
 
   /**
    * 销毁后钩子
-   * 子类可重写此方法以实现销毁后的清理工作
    */
   protected async onAfterDestroy(): Promise<void> {
-    // 默认实现为空，由子类重写
+    // 空实现，子类可以重写
   }
 
   /**
-   * 获取依赖的模块
-   *
-   * @param moduleId - 依赖模块ID
-   * @returns 依赖模块实例
+   * 获取其他模块实例
+   * @param moduleId - 模块ID
+   * @returns 模块实例
    */
-  protected getModule<T extends Module>(moduleId: string): T {
+  protected getModule<T extends ModuleInterface>(moduleId: string): T {
     if (!this._kernel) {
-      throw new Error(`模块${this.metadata.id}尚未绑定内核实例，无法获取依赖模块`);
+      throw new Error(`模块 ${this.metadata.id} 没有关联内核实例，无法获取其他模块`);
     }
 
-    const module = this._kernel.getModule(moduleId) as T;
-    if (!module) {
-      throw new Error(`找不到模块${this.metadata.id}所依赖的模块: ${moduleId}`);
-    }
-
-    return module;
+    return this._kernel.getModule<T>(moduleId);
   }
 
   /**
-   * 获取可选的依赖模块
-   * 与getModule不同，如果模块不存在不会抛出异常，而是返回undefined
-   *
-   * @param moduleId - 依赖模块ID
-   * @returns 依赖模块实例或undefined
+   * 获取其他模块实例（可选）
+   * 如果模块不存在，返回undefined而不是抛出错误
+   * @param moduleId - 模块ID
+   * @returns 模块实例或undefined
    */
-  protected getOptionalModule<T extends Module>(moduleId: string): T | undefined {
+  protected getOptionalModule<T extends ModuleInterface>(moduleId: string): T | undefined {
     if (!this._kernel) {
       return undefined;
     }
 
-    return this._kernel.getModule(moduleId) as T | undefined;
+    try {
+      return this._kernel.getModule<T>(moduleId);
+    } catch {
+      return undefined;
+    }
   }
 }

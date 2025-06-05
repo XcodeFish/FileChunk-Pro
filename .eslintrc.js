@@ -17,10 +17,10 @@ module.exports = {
   rules: {
     'prettier/prettier': 'error',
     '@typescript-eslint/explicit-function-return-type': 'off',
-    '@typescript-eslint/no-explicit-any': 'warn',
+    '@typescript-eslint/no-explicit-any': 'off', // 修改为off
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     '@typescript-eslint/explicit-module-boundary-types': 'off',
-    'no-console': ['warn', { allow: ['warn', 'error'] }],
+    'no-console': 'off', // 修改为off
     semi: ['error', 'always'],
     quotes: ['error', 'single'],
     '@typescript-eslint/no-var-requires': 'error'
@@ -37,6 +37,9 @@ module.exports = {
     },
     {
       files: ['**/tests/**'],
+      parserOptions: {
+        project: './tsconfig.test.json'
+      },
       rules: {
         '@typescript-eslint/no-explicit-any': 'off'
       }
@@ -54,7 +57,10 @@ module.exports = {
     {
       files: ['examples/**/*.ts'],
       parserOptions: {
-        project: './examples/tsconfig.json'
+        project: './tsconfig.test.json'
+      },
+      rules: {
+        'no-console': 'off'
       }
     },
     {

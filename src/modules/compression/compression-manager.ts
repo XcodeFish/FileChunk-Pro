@@ -1,4 +1,4 @@
-import { Kernel } from '../../core/kernel';
+import { FileChunkKernel } from '../../core/kernel';
 import { Module } from '../../core/module-base';
 import { AdaptiveCompressionStrategy } from './compression-strategies';
 
@@ -30,7 +30,7 @@ export interface CompressionOptions {
 
 export class CompressionManager implements Module {
   private options: CompressionOptions;
-  private kernel!: Kernel; // 使用非空断言操作符，因为会在init方法中初始化
+  private kernel!: FileChunkKernel; // 使用非空断言操作符，因为会在init方法中初始化
   private adaptiveStrategy: AdaptiveCompressionStrategy;
   private compressionStats: Map<string, CompressionStat>; // 压缩统计信息，按文件类型分类
   private devicePerformanceScore: number = 0.5; // 设备性能得分(0-1)，默认中等
@@ -71,7 +71,7 @@ export class CompressionManager implements Module {
     this.measureDevicePerformance();
   }
 
-  init(kernel: Kernel): void {
+  init(kernel: FileChunkKernel): void {
     this.kernel = kernel;
 
     // 注册压缩相关事件

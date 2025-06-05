@@ -1,7 +1,7 @@
 import { ModuleMetadata, ModuleStatus, ModuleLifecycleError } from '../types/modules';
 import { Module as ModuleInterface } from '../types/modules';
 import { EventEmitter } from './event-bus';
-import { Kernel } from './kernel';
+import { FileChunkKernel } from './kernel';
 
 /**
  * 模块接口定义
@@ -12,7 +12,7 @@ export interface Module {
    * 初始化模块
    * @param kernel 微内核实例
    */
-  init(kernel: Kernel): void;
+  init(kernel: FileChunkKernel): void;
 }
 
 /**
@@ -41,7 +41,7 @@ export abstract class BaseModule implements ModuleInterface {
   /**
    * 依赖注入容器
    */
-  protected _kernel?: Kernel;
+  protected _kernel?: FileChunkKernel;
 
   /**
    * 事件总线实例
@@ -102,7 +102,7 @@ export abstract class BaseModule implements ModuleInterface {
    *
    * @param kernel - 内核实例
    */
-  setKernel(kernel: Kernel): void {
+  setKernel(kernel: FileChunkKernel): void {
     this._kernel = kernel;
   }
 

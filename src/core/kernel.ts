@@ -1,4 +1,4 @@
-import { Module as ModuleInterface } from '../types/modules';
+import { EventEmitter } from 'events';
 
 /**
  * 内核事件类型
@@ -123,45 +123,41 @@ export interface KernelState {
 }
 
 /**
- * 微内核核心类
- * 负责模块的注册、管理和生命周期控制
+ * 微内核引擎类
+ * FileChunk Pro的核心架构组件，负责模块的注册和管理
  */
-export class Kernel {
-  // 存储已注册的模块
-  private modules = new Map<string, ModuleInterface>();
-
-  // 事件处理器
-  private eventHandlers = new Map<string, Array<(data: unknown) => void>>();
+export class FileChunkKernel {
+  private modules: Map<string, any> = new Map();
+  private eventEmitter: EventEmitter = new EventEmitter();
+  private state: Record<string, any> = {
+    status: 'idle'
+  };
 
   /**
    * 注册模块
    * @param name 模块名称
    * @param module 模块实例
    */
-  registerModule(name: string, module: ModuleInterface): Kernel {
-    if (this.modules.has(name)) {
-      throw new Error(`模块"${name}"已注册`);
-    }
-
+  public registerModule(name: string, module: any): this {
     this.modules.set(name, module);
-    // 在注册时直接调用init，不传参数
-    module.init();
+
+    // 如果模块有初始化方法，调用它
+    if (typeof module.init === 'function') {
+      module.init(this);
+    }
 
     return this;
   }
 
   /**
-   * 获取模块
+   * 获取已注册的模块
    * @param name 模块名称
-   * @returns 模块实例
    */
-  getModule<T extends ModuleInterface>(name: string): T {
-    const module = this.modules.get(name);
-    if (!module) {
-      throw new Error(`模块"${name}"未注册`);
+  public getModule<T = any>(name: string): T {
+    if (!this.modules.has(name)) {
+      throw new Error(`模块 ${name} 未注册`);
     }
-
-    return module as T;
+    return this.modules.get(name) as T;
   }
 
   /**
@@ -169,49 +165,43 @@ export class Kernel {
    * @param event 事件名称
    * @param handler 事件处理函数
    */
-  on<T>(event: string, handler: (data: T) => void): void {
-    if (!this.eventHandlers.has(event)) {
-      this.eventHandlers.set(event, []);
-    }
-
-    this.eventHandlers.get(event)!.push(handler as (data: unknown) => void);
+  public on(event: string, handler: (...args: any[]) => void): this {
+    this.eventEmitter.on(event, handler);
+    return this;
   }
 
   /**
-   * 注销事件监听器
+   * 移除事件监听器
    * @param event 事件名称
    * @param handler 事件处理函数
    */
-  off<T>(event: string, handler: (data: T) => void): void {
-    if (!this.eventHandlers.has(event)) {
-      return;
-    }
-
-    const handlers = this.eventHandlers.get(event)!;
-    const index = handlers.indexOf(handler as (data: unknown) => void);
-
-    if (index !== -1) {
-      handlers.splice(index, 1);
-    }
+  public off(event: string, handler: (...args: any[]) => void): this {
+    this.eventEmitter.off(event, handler);
+    return this;
   }
 
   /**
    * 触发事件
    * @param event 事件名称
-   * @param data 事件数据
+   * @param args 事件参数
    */
-  emit<T>(event: string, data?: T): void {
-    if (!this.eventHandlers.has(event)) {
-      return;
-    }
+  public emit(event: string, ...args: any[]): boolean {
+    return this.eventEmitter.emit(event, ...args);
+  }
 
-    const handlers = this.eventHandlers.get(event)!.slice();
-    for (const handler of handlers) {
-      try {
-        handler(data as unknown);
-      } catch (error) {
-        console.error(`事件处理器错误 (${event}):`, error);
-      }
-    }
+  /**
+   * 更新内核状态
+   * @param newState 新状态
+   */
+  public updateState(newState: Record<string, any>): void {
+    this.state = { ...this.state, ...newState };
+    this.emit('stateChange', this.state);
+  }
+
+  /**
+   * 获取当前状态
+   */
+  public getState(): Record<string, any> {
+    return { ...this.state };
   }
 }

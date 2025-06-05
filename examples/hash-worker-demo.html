@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FileChunk Pro - 哈希计算Worker示例</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .section {
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background-color: #f9f9f9;
+    }
+
+    .buttons {
+      display: flex;
+      gap: 10px;
+    }
+
+    button {
+      padding: 8px 16px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+
+    .progress-container {
+      width: 100%;
+      background-color: #ddd;
+      border-radius: 4px;
+      margin: 10px 0;
+    }
+
+    .progress-bar {
+      height: 20px;
+      background-color: #4CAF50;
+      width: 0%;
+      border-radius: 4px;
+      transition: width 0.3s;
+    }
+
+    .result {
+      font-family: monospace;
+      white-space: pre-wrap;
+      background-color: #f0f0f0;
+      padding: 10px;
+      border-radius: 4px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .info {
+      color: #666;
+      font-size: 13px;
+    }
+
+    .stats {
+      font-size: 12px;
+      color: #666;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>FileChunk Pro - 哈希计算Worker示例</h1>
+
+    <div class="section">
+      <div class="header">
+        <h2>文件哈希计算</h2>
+        <span class="info">使用Web Worker进行后台计算，不阻塞UI</span>
+      </div>
+
+      <p>选择一个或多个文件，点击"计算哈希"按钮计算文件的MD5哈希值。</p>
+
+      <div class="buttons">
+        <input type="file" id="fileInput" multiple>
+        <button id="calculateBtn">计算哈希</button>
+        <button id="cancelBtn" disabled>取消计算</button>
+      </div>
+
+      <div class="progress-container">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+      <div id="progressText">0%</div>
+
+      <h3>计算结果</h3>
+      <div class="result" id="result">选择文件并点击"计算哈希"按钮...</div>
+
+      <div class="stats" id="stats"></div>
+    </div>
+  </div>
+
+  <!-- 该脚本会在构建后集成 -->
+  <script>
+    // 模拟FileChunk Pro库的加载
+    document.addEventListener('DOMContentLoaded', () =>
+    {
+      const fileInput = document.getElementById('fileInput')
+      const calculateBtn = document.getElementById('calculateBtn')
+      const cancelBtn = document.getElementById('cancelBtn')
+      const progressBar = document.getElementById('progressBar')
+      const progressText = document.getElementById('progressText')
+      const result = document.getElementById('result')
+      const stats = document.getElementById('stats')
+
+      // 模拟WorkerManager和工具函数
+      // 注意：这只是演示用途，实际项目中应使用从库中导入的功能
+      const mockWorkerManager = {
+        calculateHash (file)
+        {
+          return new Promise((resolve, reject) =>
+          {
+            const reader = new FileReader()
+            reader.onload = function (event)
+            {
+              // 模拟进度更新
+              const totalChunks = 20
+              let processedChunks = 0
+
+              const interval = setInterval(() =>
+              {
+                processedChunks++
+                const progress = Math.min(Math.round((processedChunks / totalChunks) * 100), 100)
+
+                // 更新进度
+                progressBar.style.width = `${progress}%`
+                progressText.textContent = `${progress}%`
+
+                if (processedChunks >= totalChunks) {
+                  clearInterval(interval)
+
+                  // 生成模拟哈希
+                  const hash = Array.from(new Array(32), () =>
+                    Math.floor(Math.random() * 16).toString(16)).join('')
+
+                  setTimeout(() => resolve(hash), 500)
+                }
+              }, 200)
+
+              // 允许取消
+              cancelBtn.disabled = false
+              cancelBtn.onclick = () =>
+              {
+                clearInterval(interval)
+                cancelBtn.disabled = true
+                reject(new Error('用户取消了计算'))
+              }
+            }
+
+            reader.onerror = function ()
+            {
+              reject(new Error('读取文件失败'))
+            }
+
+            reader.readAsArrayBuffer(file)
+          })
+        }
+      }
+
+      function formatFileSize (bytes)
+      {
+        if (bytes < 1024) return bytes + ' B'
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB'
+        if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + ' MB'
+        return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB'
+      }
+
+      async function calculateFileHash (file)
+      {
+        try {
+          progressBar.style.width = '0%'
+          progressText.textContent = '0%'
+          result.textContent = `计算中...`
+          calculateBtn.disabled = true
+
+          const startTime = performance.now()
+          const hash = await mockWorkerManager.calculateHash(file)
+          const endTime = performance.now()
+
+          const duration = ((endTime - startTime) / 1000).toFixed(2)
+          result.textContent = `文件: ${file.name}\n大小: ${formatFileSize(file.size)}\nMD5: ${hash}\n\n计算用时: ${duration} 秒`
+
+          stats.textContent = `处理速度: ${(file.size / (1024 * 1024) / (duration)).toFixed(2)} MB/秒`
+
+          return hash
+        } catch (error) {
+          result.textContent = `计算失败: ${error.message}`
+          return null
+        } finally {
+          calculateBtn.disabled = false
+          cancelBtn.disabled = true
+        }
+      }
+
+      async function calculateMultipleFileHashes (files)
+      {
+        try {
+          progressBar.style.width = '0%'
+          progressText.textContent = '0%'
+          result.textContent = `计算中...`
+          calculateBtn.disabled = true
+
+          let resultText = '计算结果：\n\n'
+
+          for (let i = 0; i < files.length; i++) {
+            const file = files[i]
+            progressText.textContent = `处理第 ${i + 1}/${files.length} 个文件...`
+
+            try {
+              const hash = await mockWorkerManager.calculateHash(file)
+              resultText += `${file.name}: ${hash}\n`
+            } catch (error) {
+              resultText += `${file.name}: 计算失败 - ${error.message}\n`
+            }
+          }
+
+          result.textContent = resultText
+        } catch (error) {
+          result.textContent = `计算失败: ${error.message}`
+        } finally {
+          calculateBtn.disabled = false
+          cancelBtn.disabled = true
+        }
+      }
+
+      // 绑定点击事件
+      calculateBtn.addEventListener('click', async () =>
+      {
+        const files = fileInput.files
+        if (!files || files.length === 0) {
+          alert('请先选择文件')
+          return
+        }
+
+        if (files.length === 1) {
+          await calculateFileHash(files[0])
+        } else {
+          await calculateMultipleFileHashes(Array.from(files))
+        }
+      })
+
+      // 添加提示信息
+      result.textContent = '此示例演示了如何使用FileChunk Pro的哈希计算功能。\n\n在实际项目中，所有计算都会在Web Worker中进行，不会阻塞主线程。\n\n选择一个或多个文件，然后点击"计算哈希"按钮开始计算。'
+    });
+  </script>
+</body>
+
+</html>

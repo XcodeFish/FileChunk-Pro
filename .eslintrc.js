@@ -50,6 +50,22 @@ module.exports = {
         '@typescript-eslint/ban-ts-comment': 'off',
         '@typescript-eslint/triple-slash-reference': 'off'
       }
+    },
+    {
+      files: ['examples/**/*.ts'],
+      parserOptions: {
+        project: './examples/tsconfig.json'
+      }
+    },
+    {
+      files: ['**/*.html'],
+      parser: 'espree',
+      plugins: ['html'],
+      parserOptions: {
+        ecmaVersion: 2020,
+        sourceType: 'module',
+        project: null
+      }
     }
   ],
   ignorePatterns: ['src/platforms/native/react-native-adapter.ts']

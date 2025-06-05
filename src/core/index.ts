@@ -1,29 +1,17 @@
 /**
- * 核心模块导出文件
+ * FileChunk Pro - 核心模块
+ *
+ * 导出所有核心功能组件，包括微内核、事件总线和模块基类。
  */
 
-// 导出微内核
-export { Kernel, KernelOptions, KernelEventType } from './kernel';
-
-// 导出模块基类
-export { BaseModule } from './module-base';
-
-// 导出模块注册中心
-export {
-  ModuleRegistryImpl,
-  ModuleHotReplaceOptions,
-  DependencyNode,
-  ModuleDependencyGraph
-} from './module-registry';
-
 // 导出事件总线
-export { EventBusImpl } from './event-bus';
+export {
+  EventEmitter,
+  EventPriority,
+  type EventHandler,
+  type EventSubscriptionOptions
+} from './event-bus';
 
-// 导出模块工具类
-export { ModuleUtil } from './module-util';
-
-// 重导出模块类型定义
-export * from '../types/modules';
-
-// 重导出事件类型定义
-export * from '../types/events';
+// TODO: 导出其他核心组件，如微内核、模块基类等
+// export { Kernel } from './kernel';
+// export { ModuleBase } from './module-base';

@@ -1,2 +1,5 @@
 # 忽略React Native适配器的require警告
 src/platforms/native/react-native-adapter.ts 
+
+# 忽略HTML示例文件
+examples/*.html 

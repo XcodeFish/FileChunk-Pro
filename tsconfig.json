@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "es2018",
     "module": "esnext",
-    "lib": ["dom", "esnext"],
+    "lib": ["dom", "esnext", "webworker"],
     "declaration": true,
     "sourceMap": true,
     "outDir": "./dist",

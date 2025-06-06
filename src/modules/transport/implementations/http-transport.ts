@@ -248,20 +248,22 @@ export class HttpTransport extends BaseModule {
   }
 
   /**
-   * 开始文件上传
+   * 上传文件
    * @param file 要上传的文件
-   * @returns Promise<string> 上传成功后的文件URL
+   * @returns 上传成功后的文件URL
    */
-  async uploadFile(file: File): Promise<string> {
-    // 获取平台适配器
-    const platformModule = this.getModule('platform');
-    const platform = platformModule as unknown as PlatformAdapter;
+  async uploadFile(file: File, platform: any): Promise<string> {
+    // 创建任务ID
+    const taskId = this.generateTaskId(file);
+
+    // 更新任务状态
+    this.updateTaskStatus(taskId, 'preparing', 0);
 
     try {
-      // 生成上传任务ID
-      const taskId = this.generateTaskId(file);
+      // 获取平台适配器
+      const platformAdapter = platform || this.getModule<any>('platform');
 
-      // 创建上传任务
+      // 生成上传任务ID
       const task: UploadTask = {
         id: taskId,
         file: file,
@@ -289,8 +291,8 @@ export class HttpTransport extends BaseModule {
       let fileHash: string;
 
       // 尝试从平台适配器获取哈希计算功能
-      if (typeof platform.getFileInfo === 'function') {
-        const fileInfo = await platform.getFileInfo(file);
+      if (typeof platformAdapter.getFileInfo === 'function') {
+        const fileInfo = await platformAdapter.getFileInfo(file);
         fileHash = `${fileInfo.name}_${fileInfo.size}_${fileInfo.lastModified}`;
         this.emit('transport:hashComplete', { hash: fileHash, taskId });
       } else {
@@ -305,7 +307,7 @@ export class HttpTransport extends BaseModule {
 
       // 检查文件是否已存在（秒传）
       if (this.options.enableQuickUpload) {
-        const quickUploadResult = await this.checkFileExists(fileHash, file, platform);
+        const quickUploadResult = await this.checkFileExists(fileHash, file, platformAdapter);
 
         if (quickUploadResult.exists) {
           this.currentFileUrl = quickUploadResult.url || null;
@@ -338,7 +340,7 @@ export class HttpTransport extends BaseModule {
         const optimalChunkSize = this.chunkStrategy.getOptimalChunkSize(file.size);
 
         // 创建文件分片
-        const chunks = await platform.createChunks(file, optimalChunkSize);
+        const chunks = await platformAdapter.createChunks(file, optimalChunkSize);
 
         // 创建分片迭代器，优化内存使用
         const chunkIterator = new ChunkIterator(chunks, {
@@ -353,7 +355,7 @@ export class HttpTransport extends BaseModule {
 
         // 上传分片
         this.updateTaskStatus(taskId, 'uploading');
-        await this.uploadChunks(chunkIterator, uploadedChunks, fileHash, platform, taskId);
+        await this.uploadChunks(chunkIterator, uploadedChunks, fileHash, platformAdapter, taskId);
 
         // 如果上传被取消或失败，抛出错误
         const currentTask = this.tasks.get(taskId);
@@ -370,7 +372,12 @@ export class HttpTransport extends BaseModule {
         }
 
         // 所有分片上传成功，发送合并请求
-        const mergeResult = await this.mergeChunks(fileHash, chunks.length, file.name, platform);
+        const mergeResult = await this.mergeChunks(
+          fileHash,
+          chunks.length,
+          file.name,
+          platformAdapter
+        );
 
         // 更新任务状态
         this.currentFileUrl = mergeResult.url;
@@ -383,7 +390,7 @@ export class HttpTransport extends BaseModule {
       } else {
         // 不启用秒传，直接上传全部内容
         const optimalChunkSize = this.chunkStrategy.getOptimalChunkSize(file.size);
-        const chunks = await platform.createChunks(file, optimalChunkSize);
+        const chunks = await platformAdapter.createChunks(file, optimalChunkSize);
 
         // 创建分片迭代器
         const chunkIterator = new ChunkIterator(chunks, {
@@ -392,7 +399,7 @@ export class HttpTransport extends BaseModule {
 
         // 上传分片
         this.updateTaskStatus(taskId, 'uploading');
-        await this.uploadChunks(chunkIterator, new Set(), fileHash, platform, taskId);
+        await this.uploadChunks(chunkIterator, new Set(), fileHash, platformAdapter, taskId);
 
         // 检查上传状态
         const currentTask = this.tasks.get(taskId);
@@ -409,7 +416,12 @@ export class HttpTransport extends BaseModule {
         }
 
         // 发送合并请求
-        const mergeResult = await this.mergeChunks(fileHash, chunks.length, file.name, platform);
+        const mergeResult = await this.mergeChunks(
+          fileHash,
+          chunks.length,
+          file.name,
+          platformAdapter
+        );
 
         // 更新任务状态
         this.currentFileUrl = mergeResult.url;

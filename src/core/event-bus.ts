@@ -54,7 +54,7 @@ export class EventEmitter {
   /**
    * 通配符事件处理函数
    */
-  private wildcardHandlers: Subscription[];
+  private wildcardHandlers: Map<string, Subscription[]>;
 
   /**
    * 是否启用异步事件处理
@@ -66,8 +66,8 @@ export class EventEmitter {
    */
   constructor() {
     this.eventMap = new Map();
-    this.wildcardHandlers = [];
-    this.asyncEnabled = false;
+    this.wildcardHandlers = new Map();
+    this.asyncEnabled = true; // 默认启用异步事件处理
   }
 
   /**
@@ -96,13 +96,19 @@ export class EventEmitter {
   public on(event: string, handler: EventHandler, options: EventSubscriptionOptions = {}): this {
     const subscription: Subscription = {
       handler,
-      priority: options.priority || EventPriority.NORMAL,
+      priority: options.priority !== undefined ? options.priority : EventPriority.NORMAL,
       once: !!options.once
     };
 
-    if (event === '*') {
-      this.wildcardHandlers.push(subscription);
-      this.sortSubscriptions(this.wildcardHandlers);
+    if (event.includes('*')) {
+      const pattern = event.replace('*', '');
+      if (!this.wildcardHandlers.has(pattern)) {
+        this.wildcardHandlers.set(pattern, []);
+      }
+
+      const handlers = this.wildcardHandlers.get(pattern)!;
+      handlers.push(subscription);
+      this.sortSubscriptions(handlers);
     } else {
       if (!this.eventMap.has(event)) {
         this.eventMap.set(event, []);
@@ -134,14 +140,21 @@ export class EventEmitter {
    * @param handler 事件处理函数，如果不提供则移除该事件的所有监听器
    */
   public off(event: string, handler?: EventHandler): this {
-    if (event === '*') {
-      if (handler) {
-        const index = this.wildcardHandlers.findIndex(sub => sub.handler === handler);
-        if (index !== -1) {
-          this.wildcardHandlers.splice(index, 1);
+    if (event.includes('*')) {
+      const pattern = event.replace('*', '');
+      if (this.wildcardHandlers.has(pattern)) {
+        if (handler) {
+          const handlers = this.wildcardHandlers.get(pattern)!;
+          const index = handlers.findIndex(sub => sub.handler === handler);
+          if (index !== -1) {
+            handlers.splice(index, 1);
+          }
+          if (handlers.length === 0) {
+            this.wildcardHandlers.delete(pattern);
+          }
+        } else {
+          this.wildcardHandlers.delete(pattern);
         }
-      } else {
-        this.wildcardHandlers = [];
       }
     } else if (this.eventMap.has(event)) {
       if (handler) {
@@ -149,6 +162,9 @@ export class EventEmitter {
         const index = handlers.findIndex(sub => sub.handler === handler);
         if (index !== -1) {
           handlers.splice(index, 1);
+        }
+        if (handlers.length === 0) {
+          this.eventMap.delete(event);
         }
       } else {
         this.eventMap.delete(event);
@@ -164,15 +180,17 @@ export class EventEmitter {
    * @param event 事件名称
    * @param args 传递给事件处理函数的参数
    */
-  public emit(event: string, ...args: any[]): this {
+  public async emit(event: string, ...args: any[]): Promise<this> {
     // 处理具体事件
     if (this.eventMap.has(event)) {
-      this.triggerHandlers(this.eventMap.get(event)!, args);
+      await this.triggerHandlers(this.eventMap.get(event)!, args);
     }
 
     // 处理通配符事件
-    if (this.wildcardHandlers.length > 0) {
-      this.triggerHandlers(this.wildcardHandlers, [event, ...args]);
+    for (const [pattern, handlers] of this.wildcardHandlers.entries()) {
+      if (event.startsWith(pattern)) {
+        await this.triggerHandlers(handlers, args);
+      }
     }
 
     return this;
@@ -181,7 +199,7 @@ export class EventEmitter {
   /**
    * 触发事件处理函数
    */
-  private triggerHandlers(handlers: Subscription[], args: any[]): void {
+  private async triggerHandlers(handlers: Subscription[], args: any[]): Promise<void> {
     // 创建副本以避免在迭代中修改数组时的问题
     const handlersToTrigger = [...handlers];
 
@@ -191,9 +209,7 @@ export class EventEmitter {
     for (const subscription of handlersToTrigger) {
       try {
         if (this.asyncEnabled) {
-          setTimeout(() => {
-            subscription.handler(...args);
-          }, 0);
+          await Promise.resolve().then(() => subscription.handler(...args));
         } else {
           subscription.handler(...args);
         }
@@ -231,10 +247,18 @@ export class EventEmitter {
    * @param event 事件名称
    */
   public hasListeners(event: string): boolean {
-    return (
-      (this.eventMap.has(event) && this.eventMap.get(event)!.length > 0) ||
-      this.wildcardHandlers.length > 0
-    );
+    if (this.eventMap.has(event) && this.eventMap.get(event)!.length > 0) {
+      return true;
+    }
+
+    // 检查是否有匹配的通配符监听器
+    for (const pattern of this.wildcardHandlers.keys()) {
+      if (event.startsWith(pattern)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /**
@@ -244,17 +268,32 @@ export class EventEmitter {
    */
   public listenerCount(event?: string): number {
     if (event) {
-      return event === '*'
-        ? this.wildcardHandlers.length
-        : this.eventMap.has(event)
-          ? this.eventMap.get(event)!.length
-          : 0;
-    } else {
-      let count = this.wildcardHandlers.length;
-      this.eventMap.forEach(handlers => {
-        count += handlers.length;
-      });
+      let count = this.eventMap.has(event) ? this.eventMap.get(event)!.length : 0;
+
+      // 计算匹配的通配符监听器
+      if (event !== '*') {
+        for (const [pattern, handlers] of this.wildcardHandlers.entries()) {
+          if (event.startsWith(pattern)) {
+            count += handlers.length;
+          }
+        }
+      }
+
       return count;
+    } else {
+      let total = 0;
+
+      // 计算所有具体事件的监听器
+      for (const handlers of this.eventMap.values()) {
+        total += handlers.length;
+      }
+
+      // 计算所有通配符事件的监听器
+      for (const handlers of this.wildcardHandlers.values()) {
+        total += handlers.length;
+      }
+
+      return total;
     }
   }
 
@@ -263,7 +302,7 @@ export class EventEmitter {
    */
   public removeAllListeners(): this {
     this.eventMap.clear();
-    this.wildcardHandlers = [];
+    this.wildcardHandlers.clear();
     return this;
   }
 }

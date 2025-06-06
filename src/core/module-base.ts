@@ -490,86 +490,82 @@ export abstract class BaseModule implements ModuleInterface {
  * 提供统一的生命周期管理和核心功能访问
  */
 export abstract class ModuleBase {
-  // 微内核引用
+  /**
+   * 内核引用
+   */
   protected kernel!: FileChunkKernel;
 
-  // 日志工具
+  /**
+   * 简易日志工具
+   */
   protected logger = {
-    debug: (message: string, ...args: any[]) => {
-      console.debug(`[${this.constructor.name}] ${message}`, ...args);
-    },
-    info: (message: string, ...args: any[]) => {
-      console.info(`[${this.constructor.name}] ${message}`, ...args);
-    },
-    warn: (message: string, ...args: any[]) => {
-      console.warn(`[${this.constructor.name}] ${message}`, ...args);
-    },
-    error: (message: string, ...args: any[]) => {
-      console.error(`[${this.constructor.name}] ${message}`, ...args);
-    }
+    debug: (message: string) => console.debug(message),
+    info: (message: string) => console.info(message),
+    warn: (message: string) => console.warn(message),
+    error: (message: string) => console.error(message)
   };
 
   /**
    * 初始化模块
-   * @param kernel 微内核引用
+   * @param kernel 内核实例
    */
   abstract init(kernel: FileChunkKernel): Promise<void>;
 
   /**
-   * 获取内核引用
-   * @returns 内核实例
+   * 获取模块名称
+   */
+  abstract getName(): string;
+
+  /**
+   * 获取内核实例
    */
   getKernel(): FileChunkKernel {
     if (!this.kernel) {
-      throw new Error('模块尚未初始化，内核引用不可用');
+      throw new Error('模块未初始化，内核引用不可用');
     }
     return this.kernel;
   }
 
   /**
+   * 获取依赖模块列表
+   */
+  getDependencies(): string[] {
+    return [];
+  }
+
+  /**
    * 获取配置
-   * @param path 配置路径
-   * @param defaultValue 默认值
-   * @returns 配置值
    */
   getConfig<T = any>(path: string, defaultValue?: T): T {
-    return this.getKernel().getConfig<T>(path, defaultValue);
+    return this.kernel.getConfig(path, defaultValue);
   }
 
   /**
    * 设置配置
-   * @param path 配置路径
-   * @param value 配置值
    */
   setConfig(path: string, value: any): void {
-    this.getKernel().setConfig(path, value);
+    this.kernel.setConfig(path, value);
   }
 
   /**
-   * 获取其他模块实例
-   * @param name 模块名称
-   * @returns 模块实例
+   * 获取模块
    */
   getModule<T = any>(name: string): T {
-    return this.getKernel().getModule<T>(name);
+    return this.kernel.getModule<T>(name);
   }
 
   /**
-   * 注册事件处理器
-   * @param event 事件名称
-   * @param handler 处理函数
-   * @returns 移除监听器的函数
+   * 注册事件监听器
    */
   on<T = any>(event: string, handler: (data?: T) => void): () => void {
-    return this.getKernel().on(event, handler);
+    this.kernel.on(event, handler);
+    return () => this.kernel.off(event, handler);
   }
 
   /**
    * 触发事件
-   * @param event 事件名称
-   * @param data 事件数据
    */
   emit<T = any>(event: string, data?: T): void {
-    this.getKernel().emit(event, data);
+    this.kernel.emit(event, data);
   }
 }

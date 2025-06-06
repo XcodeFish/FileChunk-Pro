@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { Kernel } from '../core/kernel';
+import { FileChunkKernel } from '../core/kernel';
 
 /**
  * 平台特性描述接口
@@ -71,7 +71,7 @@ export abstract class PlatformAdapter {
   /** 平台支持的特性 */
   protected features: PlatformFeatures;
   /** 引用微内核实例 */
-  protected kernel: Kernel | null = null;
+  protected kernel: FileChunkKernel | null = null;
   /** 事件总线 */
   protected eventBus: EventEmitter;
   /** 平台名称 */
@@ -91,7 +91,7 @@ export abstract class PlatformAdapter {
    * 初始化适配器
    * @param kernel 微内核实例
    */
-  public init(kernel: Kernel): void {
+  public init(kernel: FileChunkKernel): void {
     this.kernel = kernel;
     this.detectFeatures();
     this.eventBus.emit('init');

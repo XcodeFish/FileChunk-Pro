@@ -14,18 +14,21 @@ export enum QueueItemStatus {
   PAUSED = 'paused', // 暂停处理
   COMPLETED = 'completed', // 处理完成
   FAILED = 'failed', // 处理失败
-  CANCELED = 'canceled' // 已取消
+  CANCELED = 'canceled', // 已取消
+  IDLE = 'idle' // 空闲
 }
 
 /**
- * 队列状态枚举
+ * 队列状态类型
  */
-export enum QueueStatus {
-  IDLE = 'idle', // 空闲状态
-  PROCESSING = 'processing', // 处理中
-  PAUSED = 'paused', // 已暂停
-  STOPPED = 'stopped' // 已停止
-}
+export type QueueStatus =
+  | 'queued'
+  | 'processing'
+  | 'paused'
+  | 'completed'
+  | 'failed'
+  | 'canceled'
+  | 'idle';
 
 /**
  * 队列项元数据接口
@@ -69,7 +72,7 @@ export interface QueueItem<T = File> {
   // 元数据
   metadata: QueueItemMetadata;
   // 当前状态
-  status: QueueItemStatus;
+  status: QueueStatus;
   // 处理进度（0-100）
   progress: number;
   // 错误信息（如果失败）
@@ -112,37 +115,30 @@ export interface QueueStateSummary extends QueueState {
 }
 
 /**
- * 队列事件类型定义
+ * 队列事件枚举
  */
-export enum QueueEventType {
-  // 队列状态变更
-  QUEUE_UPDATED = 'queueUpdated',
-  // 队列状态变更
-  STATUS_CHANGED = 'statusChanged',
-  // 开始上传
-  UPLOAD_STARTED = 'uploadStarted',
-  // 上传进度更新
-  UPLOAD_PROGRESS = 'uploadProgress',
-  // 上传完成
-  UPLOAD_COMPLETED = 'uploadCompleted',
-  // 上传失败
-  UPLOAD_FAILED = 'uploadFailed',
-  // 上传取消
-  UPLOAD_CANCELLED = 'uploadCancelled',
-  // 队列为空
-  QUEUE_EMPTY = 'queueEmpty',
-  // 队列已暂停
-  QUEUE_PAUSED = 'queuePaused',
-  // 队列已恢复
-  QUEUE_RESUMED = 'queueResumed',
-  // 队列已清空
-  QUEUE_CLEARED = 'queueCleared',
-  // 队列已恢复（从存储）
-  QUEUE_RESTORED = 'queueRestored',
-  // 网络在线
-  NETWORK_ONLINE = 'networkOnline',
-  // 网络离线
-  NETWORK_OFFLINE = 'networkOffline'
+export enum QueueEvents {
+  ITEM_ADDED = 'item:added',
+  ITEM_UPDATED = 'item:updated',
+  ITEM_REMOVED = 'item:removed',
+  QUEUE_UPDATED = 'queue:updated',
+  QUEUE_CLEARED = 'queue:cleared',
+  QUEUE_PERSISTED = 'queue:persisted',
+  QUEUE_RESTORED = 'queue:restored',
+  QUEUE_INITIALIZED = 'queue:initialized',
+  STATUS_CHANGED = 'queue:status-changed',
+  PERSIST_ERROR = 'queue:persist-error',
+  QUEUE_EMPTY = 'queue:empty',
+  UPLOAD_STARTED = 'upload:started',
+  UPLOAD_PROGRESS = 'upload:progress',
+  UPLOAD_COMPLETED = 'upload:completed',
+  UPLOAD_FAILED = 'upload:failed',
+  UPLOAD_CANCELED = 'upload:canceled',
+  QUEUE_PAUSED = 'queue:paused',
+  QUEUE_RESUMED = 'queue:resumed',
+  QUEUE_STOPPED = 'queue:stopped',
+  NETWORK_OFFLINE = 'network:offline',
+  NETWORK_ONLINE = 'network:online'
 }
 
 /**
@@ -234,14 +230,14 @@ export interface QueueManager {
    * @param handler 事件处理函数
    * @returns 取消订阅函数
    */
-  on<T = any>(event: QueueEventType | string, handler: QueueEventHandler<T>): () => void;
+  on<T = any>(event: QueueEvents | string, handler: QueueEventHandler<T>): () => void;
 
   /**
    * 移除事件处理器
    * @param event 事件类型
    * @param handler 事件处理函数
    */
-  off<T = any>(event: QueueEventType | string, handler: QueueEventHandler<T>): void;
+  off<T = any>(event: QueueEvents | string, handler: QueueEventHandler<T>): void;
 
   /**
    * 获取指定队列项
@@ -310,4 +306,44 @@ export interface SerializedQueueItem {
   error: QueueItemError | null;
   retries: number;
   result: any | null;
+}
+
+/**
+ * 队列模块接口
+ */
+export interface QueueModule {
+  /**
+   * 添加项目到队列
+   * @param item 队列项
+   */
+  add(item: QueueItem): Promise<string>;
+
+  /**
+   * 更新队列项
+   * @param id 队列项ID
+   * @param updates 更新内容
+   */
+  update(id: string, updates: Partial<QueueItem>): Promise<boolean>;
+
+  /**
+   * 移除队列项
+   * @param id 队列项ID
+   */
+  remove(id: string): Promise<boolean>;
+
+  /**
+   * 获取队列项
+   * @param id 队列项ID
+   */
+  get(id: string): QueueItem | undefined;
+
+  /**
+   * 获取所有队列项
+   */
+  getAll(): QueueItem[];
+
+  /**
+   * 获取队列状态
+   */
+  getState(): any;
 }

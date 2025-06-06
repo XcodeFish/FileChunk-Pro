@@ -7,13 +7,12 @@ import { FileChunkKernel } from '../../../core/kernel';
 import {
   PersistentQueue,
   QueueEventHandler,
-  QueueEventType,
+  QueueEvents,
   QueueItem,
-  QueueItemStatus,
   QueueManagerOptions,
   QueueState,
   QueueStateSummary,
-  QueueStatus,
+  QueueItemStatus,
   SerializedQueueItem
 } from '../interfaces';
 
@@ -56,7 +55,7 @@ export class UploadQueueManager implements PersistentQueue {
    * @private
    */
   private state: QueueState = {
-    status: QueueStatus.IDLE,
+    status: QueueItemStatus.IDLE,
     isOnline: true,
     processingItem: null,
     activeUploads: 0,
@@ -182,10 +181,10 @@ export class UploadQueueManager implements PersistentQueue {
     }
 
     // 触发事件
-    this.emitEvent(QueueEventType.QUEUE_UPDATED, this.getQueueState());
+    this.emitEvent(QueueEvents.QUEUE_UPDATED, this.getQueueState());
 
     // 如果是空闲状态且在线，开始处理队列
-    if (this.state.status === QueueStatus.IDLE && this.state.isOnline) {
+    if (this.state.status === QueueItemStatus.IDLE && this.state.isOnline) {
       this.processQueue();
     }
 
@@ -231,24 +230,24 @@ export class UploadQueueManager implements PersistentQueue {
     // 如果不在线、已暂停或正在处理，直接返回
     if (
       !this.state.isOnline ||
-      this.state.status === QueueStatus.PAUSED ||
-      this.state.status === QueueStatus.PROCESSING
+      this.state.status === QueueItemStatus.PAUSED ||
+      this.state.status === QueueItemStatus.PROCESSING
     ) {
       return;
     }
 
     // 标记为处理中
-    this.state.status = QueueStatus.PROCESSING;
-    this.emitEvent(QueueEventType.STATUS_CHANGED, this.state.status);
+    this.state.status = QueueItemStatus.PROCESSING;
+    this.emitEvent(QueueEvents.STATUS_CHANGED, this.state.status);
 
     // 获取队列中的下一个项目
     const nextItem = this.queue.find(item => item.status === QueueItemStatus.QUEUED);
 
     if (!nextItem) {
       // 队列为空，标记为空闲
-      this.state.status = QueueStatus.IDLE;
-      this.emitEvent(QueueEventType.STATUS_CHANGED, this.state.status);
-      this.emitEvent(QueueEventType.QUEUE_EMPTY);
+      this.state.status = QueueItemStatus.IDLE;
+      this.emitEvent(QueueEvents.STATUS_CHANGED, this.state.status);
+      this.emitEvent(QueueEvents.QUEUE_EMPTY);
       return;
     }
 
@@ -265,7 +264,7 @@ export class UploadQueueManager implements PersistentQueue {
     }
 
     // 触发事件
-    this.emitEvent(QueueEventType.UPLOAD_STARTED, nextItem);
+    this.emitEvent(QueueEvents.UPLOAD_STARTED, nextItem);
 
     try {
       // 使用传输模块上传文件
@@ -277,7 +276,7 @@ export class UploadQueueManager implements PersistentQueue {
         const progressHandler = (progress: number) => {
           if (nextItem) {
             nextItem.progress = progress;
-            this.emitEvent(QueueEventType.UPLOAD_PROGRESS, { id: nextItem.id, progress });
+            this.emitEvent(QueueEvents.UPLOAD_PROGRESS, { id: nextItem.id, progress });
           }
         };
 
@@ -307,8 +306,8 @@ export class UploadQueueManager implements PersistentQueue {
         }
 
         // 触发事件
-        this.emitEvent(QueueEventType.UPLOAD_COMPLETED, { id: nextItem.id, result });
-        this.emitEvent(QueueEventType.QUEUE_UPDATED, this.getQueueState());
+        this.emitEvent(QueueEvents.UPLOAD_COMPLETED, { id: nextItem.id, result });
+        this.emitEvent(QueueEvents.QUEUE_UPDATED, this.getQueueState());
 
         // 移除进度监听器
         this.kernel.off('progress', progressHandler);
@@ -340,8 +339,8 @@ export class UploadQueueManager implements PersistentQueue {
       }
 
       // 触发事件
-      this.emitEvent(QueueEventType.UPLOAD_FAILED, { id: nextItem.id, error });
-      this.emitEvent(QueueEventType.QUEUE_UPDATED, this.getQueueState());
+      this.emitEvent(QueueEvents.UPLOAD_FAILED, { id: nextItem.id, error });
+      this.emitEvent(QueueEvents.QUEUE_UPDATED, this.getQueueState());
 
       // 继续处理队列
       this.processQueue();
@@ -353,12 +352,12 @@ export class UploadQueueManager implements PersistentQueue {
    */
   async pauseQueue(): Promise<void> {
     // 如果当前不是处理中状态，直接返回
-    if (this.state.status !== QueueStatus.PROCESSING) {
+    if (this.state.status !== QueueItemStatus.PROCESSING) {
       return;
     }
 
     // 标记为暂停
-    this.state.status = QueueStatus.PAUSED;
+    this.state.status = QueueItemStatus.PAUSED;
 
     // 如果有正在处理的项目，暂停它
     if (this.processing && this.kernel) {
@@ -375,8 +374,8 @@ export class UploadQueueManager implements PersistentQueue {
     }
 
     // 触发事件
-    this.emitEvent(QueueEventType.STATUS_CHANGED, this.state.status);
-    this.emitEvent(QueueEventType.QUEUE_PAUSED);
+    this.emitEvent(QueueEvents.STATUS_CHANGED, this.state.status);
+    this.emitEvent(QueueEvents.QUEUE_PAUSED);
   }
 
   /**
@@ -384,12 +383,12 @@ export class UploadQueueManager implements PersistentQueue {
    */
   async resumeQueue(): Promise<void> {
     // 如果当前不是暂停状态，直接返回
-    if (this.state.status !== QueueStatus.PAUSED) {
+    if (this.state.status !== QueueItemStatus.PAUSED) {
       return;
     }
 
     // 标记为处理中
-    this.state.status = QueueStatus.PROCESSING;
+    this.state.status = QueueItemStatus.PROCESSING;
 
     // 如果有暂停的处理项，恢复它
     if (this.processing && this.kernel) {
@@ -409,8 +408,8 @@ export class UploadQueueManager implements PersistentQueue {
     }
 
     // 触发事件
-    this.emitEvent(QueueEventType.STATUS_CHANGED, this.state.status);
-    this.emitEvent(QueueEventType.QUEUE_RESUMED);
+    this.emitEvent(QueueEvents.STATUS_CHANGED, this.state.status);
+    this.emitEvent(QueueEvents.QUEUE_RESUMED);
   }
 
   /**
@@ -449,11 +448,11 @@ export class UploadQueueManager implements PersistentQueue {
     }
 
     // 触发事件
-    this.emitEvent(QueueEventType.UPLOAD_CANCELLED, { id });
-    this.emitEvent(QueueEventType.QUEUE_UPDATED, this.getQueueState());
+    this.emitEvent(QueueEvents.UPLOAD_CANCELED, { id });
+    this.emitEvent(QueueEvents.QUEUE_UPDATED, this.getQueueState());
 
     // 如果当前没有处理中的项目，继续处理队列
-    if (!this.processing && this.state.status === QueueStatus.PROCESSING) {
+    if (!this.processing && this.state.status === QueueItemStatus.PROCESSING) {
       this.processQueue();
     }
   }
@@ -476,7 +475,7 @@ export class UploadQueueManager implements PersistentQueue {
     // 清空队列
     this.queue = [];
     this.state.totalQueued = 0;
-    this.state.status = QueueStatus.IDLE;
+    this.state.status = QueueItemStatus.IDLE;
 
     // 持久化队列
     if (this.options.persistQueue && this.storage) {
@@ -485,9 +484,9 @@ export class UploadQueueManager implements PersistentQueue {
     }
 
     // 触发事件
-    this.emitEvent(QueueEventType.QUEUE_CLEARED);
-    this.emitEvent(QueueEventType.STATUS_CHANGED, this.state.status);
-    this.emitEvent(QueueEventType.QUEUE_UPDATED, this.getQueueState());
+    this.emitEvent(QueueEvents.QUEUE_CLEARED);
+    this.emitEvent(QueueEvents.STATUS_CHANGED, this.state.status);
+    this.emitEvent(QueueEvents.QUEUE_UPDATED, this.getQueueState());
   }
 
   /**
@@ -504,7 +503,7 @@ export class UploadQueueManager implements PersistentQueue {
         id: item.id,
         fileName: item.metadata.fileName,
         fileSize: item.metadata.fileSize,
-        status: item.status,
+        status: item.status as unknown as QueueItemStatus,
         progress: item.progress,
         addedAt: item.metadata.addedAt
       }))
@@ -549,7 +548,7 @@ export class UploadQueueManager implements PersistentQueue {
       }
 
       // 触发事件
-      this.emitEvent(QueueEventType.QUEUE_UPDATED, this.getQueueState());
+      this.emitEvent(QueueEvents.QUEUE_UPDATED, this.getQueueState());
     }
   }
 
@@ -577,7 +576,7 @@ export class UploadQueueManager implements PersistentQueue {
    * @param handler 事件处理函数
    * @returns 取消订阅函数
    */
-  on<T = any>(event: QueueEventType | string, handler: QueueEventHandler<T>): () => void {
+  on<T = any>(event: QueueEvents | string, handler: QueueEventHandler<T>): () => void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, []);
     }
@@ -593,7 +592,7 @@ export class UploadQueueManager implements PersistentQueue {
    * @param event 事件类型
    * @param handler 事件处理函数
    */
-  off<T = any>(event: QueueEventType | string, handler: QueueEventHandler<T>): void {
+  off<T = any>(event: QueueEvents | string, handler: QueueEventHandler<T>): void {
     if (!this.listeners.has(event)) return;
 
     const handlers = this.listeners.get(event)!;
@@ -615,7 +614,7 @@ export class UploadQueueManager implements PersistentQueue {
    * @param data 事件数据
    * @private
    */
-  private emitEvent<T = any>(event: QueueEventType | string, data?: T): void {
+  private emitEvent<T = any>(event: QueueEvents | string, data?: T): void {
     if (!this.listeners.has(event)) return;
 
     const handlers = [...this.listeners.get(event)!]; // 创建副本以避免迭代时修改
@@ -641,7 +640,7 @@ export class UploadQueueManager implements PersistentQueue {
    * @param event 事件类型
    * @returns 监听器数量
    */
-  getListenerCount(event?: QueueEventType | string): number {
+  getListenerCount(event?: QueueEvents | string): number {
     if (!event) {
       // 返回所有事件的监听器总数
       let count = 0;
@@ -659,7 +658,7 @@ export class UploadQueueManager implements PersistentQueue {
    * 移除所有事件监听器
    * @param event 指定事件类型（可选，不指定则清除所有）
    */
-  clearListeners(event?: QueueEventType | string): void {
+  clearListeners(event?: QueueEvents | string): void {
     if (event) {
       this.listeners.delete(event);
     } else {
@@ -674,7 +673,7 @@ export class UploadQueueManager implements PersistentQueue {
    * @param handler 事件处理函数
    * @returns 取消订阅函数
    */
-  once<T = any>(event: QueueEventType | string, handler: QueueEventHandler<T>): () => void {
+  once<T = any>(event: QueueEvents | string, handler: QueueEventHandler<T>): () => void {
     const onceHandler: QueueEventHandler = data => {
       // 先移除监听器，再调用处理函数
       this.off(event, onceHandler);
@@ -711,7 +710,7 @@ export class UploadQueueManager implements PersistentQueue {
           if (
             this.state.isOnline &&
             this.options.autoResume &&
-            this.state.status === QueueStatus.PAUSED
+            this.state.status === QueueItemStatus.PAUSED
           ) {
             this.resumeQueue();
           }
@@ -731,18 +730,18 @@ export class UploadQueueManager implements PersistentQueue {
 
     if (isOnline) {
       // 网络恢复
-      this.emitEvent(QueueEventType.NETWORK_ONLINE);
+      this.emitEvent(QueueEvents.NETWORK_ONLINE);
 
       // 如果配置了自动恢复且当前为暂停状态，恢复上传
-      if (this.options.autoResume && this.state.status === QueueStatus.PAUSED) {
+      if (this.options.autoResume && this.state.status === QueueItemStatus.PAUSED) {
         await this.resumeQueue();
       }
     } else {
       // 网络断开
-      this.emitEvent(QueueEventType.NETWORK_OFFLINE);
+      this.emitEvent(QueueEvents.NETWORK_OFFLINE);
 
       // 自动暂停上传
-      if (this.state.status === QueueStatus.PROCESSING) {
+      if (this.state.status === QueueItemStatus.PROCESSING) {
         await this.pauseQueue();
       }
     }
@@ -785,7 +784,7 @@ export class UploadQueueManager implements PersistentQueue {
         lastModified: file.lastModified || Date.now()
       },
       metadata: item.metadata,
-      status: item.status,
+      status: item.status as unknown as QueueItemStatus,
       progress: item.progress,
       error: item.error,
       retries: item.retries,
@@ -817,7 +816,7 @@ export class UploadQueueManager implements PersistentQueue {
       }
 
       // 触发事件
-      this.emitEvent(QueueEventType.QUEUE_RESTORED, this.getQueueState());
+      this.emitEvent(QueueEvents.QUEUE_RESTORED, this.getQueueState());
     } catch (error) {
       console.error('恢复队列失败:', error);
       // 恢复失败时初始化空队列

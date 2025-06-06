@@ -1,46 +1,48 @@
 import { IStorageOptions, StorageStats } from '../../types/storage';
+import { IKernel, IModule } from '../../core/interfaces';
 
 /**
- * 存储引擎基类
- * 定义统一的存储接口，所有存储实现必须继承此类
+ * 存储引擎接口，定义统一的存储操作方法
  */
-export interface StorageEngine {
+export abstract class StorageEngine implements IModule {
   /**
    * 初始化存储引擎
-   * @returns Promise 初始化结果
    */
-  init(): Promise<void>;
+  async init(_kernel: IKernel): Promise<void> {
+    // 基类默认实现，子类可以覆盖
+  }
 
   /**
    * 保存数据
-   * @param key 键名
-   * @param data 要存储的数据(任意类型)
+   * @param key 键
+   * @param data 要保存的数据
    */
-  save(key: string, data: any): Promise<void>;
+  abstract save<T>(key: string, data: T): Promise<void>;
 
   /**
    * 获取数据
-   * @param key 键名
-   * @returns 存储的数据，不存在返回null
+   * @param key 键
+   * @returns 存储的数据，不存在时返回null
    */
-  get(key: string): Promise<any>;
+  abstract get<T>(key: string): Promise<T | null>;
 
   /**
-   * 删除数据
-   * @param key 键名
+   * 移除数据
+   * @param key 键
    */
-  remove(key: string): Promise<void>;
+  abstract remove(key: string): Promise<void>;
 
   /**
-   * 清空所有数据
+   * 清除所有数据
    */
-  clear(): Promise<void>;
+  abstract clear(): Promise<void>;
 
   /**
-   * 获取存储状态统计
-   * @returns 存储统计信息
+   * 检查键是否存在
+   * @param key 键
+   * @returns 是否存在
    */
-  getStats?(): Promise<StorageStats>;
+  abstract exists(key: string): Promise<boolean>;
 }
 
 /**
@@ -63,7 +65,7 @@ export abstract class BaseStorageEngine implements StorageEngine {
   /**
    * 初始化存储引擎
    */
-  async init(): Promise<void> {
+  async init(_kernel: IKernel): Promise<void> {
     // 由子类实现
     return Promise.resolve();
   }
@@ -73,13 +75,13 @@ export abstract class BaseStorageEngine implements StorageEngine {
    * @param key 键名
    * @param data 要存储的数据
    */
-  abstract save(key: string, data: any): Promise<void>;
+  abstract save<T>(key: string, data: T): Promise<void>;
 
   /**
    * 获取数据
    * @param key 键名
    */
-  abstract get(key: string): Promise<any>;
+  abstract get<T>(key: string): Promise<T | null>;
 
   /**
    * 删除数据
@@ -91,6 +93,12 @@ export abstract class BaseStorageEngine implements StorageEngine {
    * 清空所有数据
    */
   abstract clear(): Promise<void>;
+
+  /**
+   * 检查键是否存在
+   * @param key 键名
+   */
+  abstract exists(key: string): Promise<boolean>;
 
   /**
    * 获取存储状态

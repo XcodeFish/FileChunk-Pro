@@ -274,13 +274,13 @@ export class UploadQueueManager implements PersistentQueue {
 
         // 注册进度回调
         const progressHandler = (progress: number) => {
-          if (nextItem) {
+          if (nextItem && typeof progress === 'number') {
             nextItem.progress = progress;
             this.emitEvent(QueueEvents.UPLOAD_PROGRESS, { id: nextItem.id, progress });
           }
         };
 
-        this.kernel.on('progress', progressHandler);
+        this.kernel.on('progress', progressHandler as (data?: number) => void);
 
         // 执行上传
         const result = await transport.start(nextItem.file, platform);

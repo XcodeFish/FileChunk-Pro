@@ -383,10 +383,10 @@ class CloudService {
   /**
    * 下载文件
    * @param fileID 文件ID
-   * @param tempFilePath 指定下载路径
+   * @param _tempFilePath 指定下载路径
    * @returns 下载结果
    */
-  downloadFile(fileID: string, tempFilePath?: string): Promise<string> {
+  downloadFile(fileID: string, _tempFilePath?: string): Promise<string> {
     if (!this.checkAvailable()) {
       return Promise.reject(new Error('云开发不可用'));
     }

@@ -155,7 +155,8 @@ export async function uploadChunk(
           try {
             const data = JSON.parse(res.data);
             resolve(data);
-          } catch (e) {
+          } catch (_e) {
+            // 如果不是JSON，直接返回数据
             resolve(res.data);
           }
         } else {

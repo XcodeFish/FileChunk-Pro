@@ -423,6 +423,16 @@ class ShareService {
       imagePath: options.defaultImage || '/assets/images/default_share.png'
     });
   }
+
+  /**
+   * 下载分享资源
+   * @param url 资源地址
+   * @param _options 下载选项
+   * @returns {Promise<string>} 本地文件路径
+   */
+  async downloadShareResource(url: string, _options?: Record<string, any>): Promise<string> {
+    // ... existing code ...
+  }
 }
 
 export const ShareServiceInstance = new ShareService();

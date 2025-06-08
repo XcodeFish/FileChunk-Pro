@@ -6,7 +6,7 @@
     "declaration": true,
     "sourceMap": true,
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": "./",
     "strict": true,
     "moduleResolution": "node",
     "baseUrl": "./",
@@ -29,8 +29,8 @@
     "noImplicitAny": true,
     "noImplicitThis": true,
     "noImplicitReturns": true,
-    "typeRoots": ["./node_modules/@types", "./src/platforms/native"]
+    "typeRoots": ["./node_modules/@types", "./src/platforms/native", "./typings"]
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "packages/**/*"],
   "exclude": ["node_modules", "dist", "examples", "tests", "**/*.test.ts"]
 }

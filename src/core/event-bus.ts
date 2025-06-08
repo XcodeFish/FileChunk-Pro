@@ -5,304 +5,393 @@
  */
 
 /**
- * 事件处理函数类型
+ * 事件处理器类型定义
  */
-export type EventHandler = (...args: any[]) => void;
+export type EventHandler<T = any> = (event: T) => void | Promise<void>;
 
 /**
  * 事件优先级
  */
 export enum EventPriority {
-  LOW = 0,
+  HIGH = 0,
   NORMAL = 1,
-  HIGH = 2
+  LOW = 2
 }
 
 /**
- * 事件订阅选项
+ * 事件处理器配置
  */
-export interface EventSubscriptionOptions {
-  /**
-   * 事件处理优先级
-   */
-  priority?: EventPriority;
-
-  /**
-   * 是否只触发一次后自动移除
-   */
-  once?: boolean;
-}
-
-/**
- * 事件订阅者信息
- */
-interface Subscription {
-  handler: EventHandler;
+export interface EventHandlerConfig<T = any> {
+  handler: EventHandler<T>;
   priority: EventPriority;
   once: boolean;
+  group?: string;
 }
 
 /**
- * 事件总线实现类
+ * 事件总线类
+ * 实现事件的发布/订阅模式
  */
 export class EventEmitter {
-  /**
-   * 事件处理函数映射表
-   */
-  private eventMap: Map<string, Subscription[]>;
+  private handlers: Map<string, EventHandlerConfig[]> = new Map();
+  private wildcardHandlers: EventHandlerConfig[] = [];
+  private eventHistory: Map<string, any[]> = new Map();
+  private maxHistoryLength = 100;
+  private enableHistory = false;
 
-  /**
-   * 通配符事件处理函数
-   */
-  private wildcardHandlers: Map<string, Subscription[]>;
-
-  /**
-   * 是否启用异步事件处理
-   */
-  private asyncEnabled: boolean;
-
-  /**
-   * 构造函数
-   */
-  constructor() {
-    this.eventMap = new Map();
-    this.wildcardHandlers = new Map();
-    this.asyncEnabled = true; // 默认启用异步事件处理
+  constructor(options?: { enableHistory?: boolean; maxHistoryLength?: number }) {
+    this.enableHistory = options?.enableHistory || false;
+    this.maxHistoryLength = options?.maxHistoryLength || 100;
   }
 
   /**
-   * 启用异步事件分发
+   * 订阅事件
    */
-  public enableAsync(): this {
-    this.asyncEnabled = true;
-    return this;
-  }
-
-  /**
-   * 禁用异步事件分发
-   */
-  public disableAsync(): this {
-    this.asyncEnabled = false;
-    return this;
-  }
-
-  /**
-   * 注册事件监听器
-   *
-   * @param event 事件名称，使用*表示监听所有事件
-   * @param handler 事件处理函数
-   * @param options 订阅选项
-   */
-  public on(event: string, handler: EventHandler, options: EventSubscriptionOptions = {}): this {
-    const subscription: Subscription = {
+  on<T = any>(
+    event: string,
+    handler: EventHandler<T>,
+    options?: {
+      priority?: EventPriority;
+      group?: string;
+    }
+  ): this {
+    const config: EventHandlerConfig = {
       handler,
-      priority: options.priority !== undefined ? options.priority : EventPriority.NORMAL,
-      once: !!options.once
+      priority: options?.priority || EventPriority.NORMAL,
+      once: false,
+      group: options?.group
     };
 
-    if (event.includes('*')) {
-      const pattern = event.replace('*', '');
-      if (!this.wildcardHandlers.has(pattern)) {
-        this.wildcardHandlers.set(pattern, []);
-      }
+    this.addHandler(event, config);
+    return this;
+  }
 
-      const handlers = this.wildcardHandlers.get(pattern)!;
-      handlers.push(subscription);
-      this.sortSubscriptions(handlers);
+  /**
+   * 一次性订阅事件
+   */
+  once<T = any>(
+    event: string,
+    handler: EventHandler<T>,
+    options?: {
+      priority?: EventPriority;
+      group?: string;
+    }
+  ): this {
+    const config: EventHandlerConfig = {
+      handler,
+      priority: options?.priority || EventPriority.NORMAL,
+      once: true,
+      group: options?.group
+    };
+
+    this.addHandler(event, config);
+    return this;
+  }
+
+  /**
+   * 使用通配符订阅所有事件
+   */
+  onAny<T = any>(
+    handler: EventHandler<T>,
+    options?: {
+      priority?: EventPriority;
+      group?: string;
+    }
+  ): this {
+    const config: EventHandlerConfig = {
+      handler,
+      priority: options?.priority || EventPriority.NORMAL,
+      once: false,
+      group: options?.group
+    };
+
+    this.wildcardHandlers.push(config);
+    this.sortHandlers(this.wildcardHandlers);
+    return this;
+  }
+
+  /**
+   * 取消事件订阅
+   */
+  off<T = any>(event: string, handler?: EventHandler<T>): this {
+    if (!this.handlers.has(event)) {
+      return this;
+    }
+
+    if (!handler) {
+      // 移除所有该事件的处理器
+      this.handlers.delete(event);
+      return this;
+    }
+
+    // 移除特定的处理器
+    const handlers = this.handlers.get(event)!.filter(config => config.handler !== handler);
+
+    if (handlers.length === 0) {
+      this.handlers.delete(event);
     } else {
-      if (!this.eventMap.has(event)) {
-        this.eventMap.set(event, []);
-      }
-
-      const handlers = this.eventMap.get(event)!;
-      handlers.push(subscription);
-      this.sortSubscriptions(handlers);
+      this.handlers.set(event, handlers);
     }
 
     return this;
   }
 
   /**
-   * 注册一次性事件监听器
-   *
-   * @param event 事件名称
-   * @param handler 事件处理函数
-   * @param options 订阅选项
+   * 取消通配符事件订阅
    */
-  public once(event: string, handler: EventHandler, options: EventSubscriptionOptions = {}): this {
-    return this.on(event, handler, { ...options, once: true });
+  offAny<T = any>(handler?: EventHandler<T>): this {
+    if (!handler) {
+      this.wildcardHandlers = [];
+      return this;
+    }
+
+    this.wildcardHandlers = this.wildcardHandlers.filter(config => config.handler !== handler);
+    return this;
   }
 
   /**
-   * 移除事件监听器
-   *
-   * @param event 事件名称
-   * @param handler 事件处理函数，如果不提供则移除该事件的所有监听器
+   * 按组取消订阅
    */
-  public off(event: string, handler?: EventHandler): this {
-    if (event.includes('*')) {
-      const pattern = event.replace('*', '');
-      if (this.wildcardHandlers.has(pattern)) {
-        if (handler) {
-          const handlers = this.wildcardHandlers.get(pattern)!;
-          const index = handlers.findIndex(sub => sub.handler === handler);
-          if (index !== -1) {
-            handlers.splice(index, 1);
-          }
-          if (handlers.length === 0) {
-            this.wildcardHandlers.delete(pattern);
-          }
-        } else {
-          this.wildcardHandlers.delete(pattern);
-        }
-      }
-    } else if (this.eventMap.has(event)) {
-      if (handler) {
-        const handlers = this.eventMap.get(event)!;
-        const index = handlers.findIndex(sub => sub.handler === handler);
-        if (index !== -1) {
-          handlers.splice(index, 1);
-        }
-        if (handlers.length === 0) {
-          this.eventMap.delete(event);
-        }
+  offGroup(group: string): this {
+    // 从所有事件中移除该组的处理器
+    for (const [event, handlers] of this.handlers.entries()) {
+      const filteredHandlers = handlers.filter(config => config.group !== group);
+
+      if (filteredHandlers.length === 0) {
+        this.handlers.delete(event);
       } else {
-        this.eventMap.delete(event);
+        this.handlers.set(event, filteredHandlers);
       }
     }
+
+    // 从通配符处理器中移除该组
+    this.wildcardHandlers = this.wildcardHandlers.filter(config => config.group !== group);
 
     return this;
   }
 
   /**
-   * 触发事件
-   *
-   * @param event 事件名称
-   * @param args 传递给事件处理函数的参数
+   * 发布事件
    */
-  public async emit(event: string, ...args: any[]): Promise<this> {
-    // 处理具体事件
-    if (this.eventMap.has(event)) {
-      await this.triggerHandlers(this.eventMap.get(event)!, args);
+  async emit<T = any>(event: string, payload?: T): Promise<void> {
+    // 记录事件历史
+    if (this.enableHistory) {
+      this.recordEventHistory(event, payload);
     }
 
-    // 处理通配符事件
-    for (const [pattern, handlers] of this.wildcardHandlers.entries()) {
-      if (event.startsWith(pattern)) {
-        await this.triggerHandlers(handlers, args);
-      }
-    }
+    const promises: Promise<void>[] = [];
 
-    return this;
-  }
+    // 执行特定事件处理器
+    if (this.handlers.has(event)) {
+      const handlers = [...this.handlers.get(event)!];
+      const oncers: EventHandlerConfig[] = [];
 
-  /**
-   * 触发事件处理函数
-   */
-  private async triggerHandlers(handlers: Subscription[], args: any[]): Promise<void> {
-    // 创建副本以避免在迭代中修改数组时的问题
-    const handlersToTrigger = [...handlers];
+      // 执行处理器并收集一次性处理器
+      for (const config of handlers) {
+        try {
+          const result = config.handler(payload);
+          if (result instanceof Promise) {
+            promises.push(result);
+          }
 
-    // 记录需要移除的一次性处理函数
-    const onceHandlers: Subscription[] = [];
-
-    for (const subscription of handlersToTrigger) {
-      try {
-        if (this.asyncEnabled) {
-          await Promise.resolve().then(() => subscription.handler(...args));
-        } else {
-          subscription.handler(...args);
+          if (config.once) {
+            oncers.push(config);
+          }
+        } catch (error) {
+          console.error(`Error in event handler for "${event}":`, error);
         }
+      }
 
-        // 记录需要移除的一次性处理函数
-        if (subscription.once) {
-          onceHandlers.push(subscription);
+      // 移除一次性处理器
+      if (oncers.length > 0) {
+        const remaining = handlers.filter(config => !oncers.includes(config));
+        if (remaining.length === 0) {
+          this.handlers.delete(event);
+        } else {
+          this.handlers.set(event, remaining);
+        }
+      }
+    }
+
+    // 执行通配符处理器
+    for (const config of this.wildcardHandlers) {
+      try {
+        const result = config.handler({ event, payload });
+        if (result instanceof Promise) {
+          promises.push(result);
         }
       } catch (error) {
-        console.error('事件处理函数执行错误:', error);
+        console.error(`Error in wildcard handler for "${event}":`, error);
       }
     }
 
-    // 移除已触发的一次性处理函数
-    if (onceHandlers.length > 0) {
-      for (const sub of onceHandlers) {
-        const index = handlers.indexOf(sub);
-        if (index !== -1) {
-          handlers.splice(index, 1);
+    // 等待所有异步处理器完成
+    if (promises.length > 0) {
+      await Promise.all(promises);
+    }
+  }
+
+  /**
+   * 同步发布事件（不等待异步处理器完成）
+   */
+  emitSync<T = any>(event: string, payload?: T): void {
+    // 记录事件历史
+    if (this.enableHistory) {
+      this.recordEventHistory(event, payload);
+    }
+
+    // 执行特定事件处理器
+    if (this.handlers.has(event)) {
+      const handlers = [...this.handlers.get(event)!];
+      const oncers: EventHandlerConfig[] = [];
+
+      // 执行处理器并收集一次性处理器
+      for (const config of handlers) {
+        try {
+          config.handler(payload);
+
+          if (config.once) {
+            oncers.push(config);
+          }
+        } catch (error) {
+          console.error(`Error in event handler for "${event}":`, error);
+        }
+      }
+
+      // 移除一次性处理器
+      if (oncers.length > 0) {
+        const remaining = handlers.filter(config => !oncers.includes(config));
+        if (remaining.length === 0) {
+          this.handlers.delete(event);
+        } else {
+          this.handlers.set(event, remaining);
         }
       }
     }
-  }
 
-  /**
-   * 按优先级排序订阅列表
-   */
-  private sortSubscriptions(subscriptions: Subscription[]): void {
-    subscriptions.sort((a, b) => b.priority - a.priority);
-  }
-
-  /**
-   * 检查事件是否有监听器
-   *
-   * @param event 事件名称
-   */
-  public hasListeners(event: string): boolean {
-    if (this.eventMap.has(event) && this.eventMap.get(event)!.length > 0) {
-      return true;
-    }
-
-    // 检查是否有匹配的通配符监听器
-    for (const pattern of this.wildcardHandlers.keys()) {
-      if (event.startsWith(pattern)) {
-        return true;
+    // 执行通配符处理器
+    for (const config of this.wildcardHandlers) {
+      try {
+        config.handler({ event, payload });
+      } catch (error) {
+        console.error(`Error in wildcard handler for "${event}":`, error);
       }
     }
+  }
 
-    return false;
+  /**
+   * 检查是否有事件监听器
+   */
+  hasListeners(event?: string): boolean {
+    if (event) {
+      return this.handlers.has(event) && this.handlers.get(event)!.length > 0;
+    }
+    return this.handlers.size > 0 || this.wildcardHandlers.length > 0;
   }
 
   /**
    * 获取事件监听器数量
-   *
-   * @param event 事件名称，不提供则返回所有事件的监听器总数
    */
-  public listenerCount(event?: string): number {
+  listenerCount(event?: string): number {
     if (event) {
-      let count = this.eventMap.has(event) ? this.eventMap.get(event)!.length : 0;
-
-      // 计算匹配的通配符监听器
-      if (event !== '*') {
-        for (const [pattern, handlers] of this.wildcardHandlers.entries()) {
-          if (event.startsWith(pattern)) {
-            count += handlers.length;
-          }
-        }
-      }
-
-      return count;
-    } else {
-      let total = 0;
-
-      // 计算所有具体事件的监听器
-      for (const handlers of this.eventMap.values()) {
-        total += handlers.length;
-      }
-
-      // 计算所有通配符事件的监听器
-      for (const handlers of this.wildcardHandlers.values()) {
-        total += handlers.length;
-      }
-
-      return total;
+      return this.handlers.has(event) ? this.handlers.get(event)!.length : 0;
     }
+
+    let count = this.wildcardHandlers.length;
+    for (const handlers of this.handlers.values()) {
+      count += handlers.length;
+    }
+    return count;
   }
 
   /**
-   * 移除所有事件监听器
+   * 清除所有事件监听器
    */
-  public removeAllListeners(): this {
-    this.eventMap.clear();
-    this.wildcardHandlers.clear();
+  clear(): this {
+    this.handlers.clear();
+    this.wildcardHandlers = [];
     return this;
+  }
+
+  /**
+   * 获取事件历史记录
+   */
+  getEventHistory(event?: string): Array<{ event: string; payload: any; timestamp: number }> {
+    if (!this.enableHistory) {
+      return [];
+    }
+
+    if (event) {
+      return this.eventHistory.get(event) || [];
+    }
+
+    const history: Array<{ event: string; payload: any; timestamp: number }> = [];
+    for (const [, events] of this.eventHistory.entries()) {
+      history.push(...events);
+    }
+
+    // 按时间戳排序
+    return history.sort((a, b) => a.timestamp - b.timestamp);
+  }
+
+  /**
+   * 清除事件历史
+   */
+  clearHistory(event?: string): this {
+    if (!this.enableHistory) {
+      return this;
+    }
+
+    if (event) {
+      this.eventHistory.delete(event);
+    } else {
+      this.eventHistory.clear();
+    }
+
+    return this;
+  }
+
+  /**
+   * 添加事件处理器
+   */
+  private addHandler(event: string, config: EventHandlerConfig): void {
+    if (!this.handlers.has(event)) {
+      this.handlers.set(event, []);
+    }
+
+    this.handlers.get(event)!.push(config);
+    this.sortHandlers(this.handlers.get(event)!);
+  }
+
+  /**
+   * 按优先级排序处理器
+   */
+  private sortHandlers(handlers: EventHandlerConfig[]): void {
+    handlers.sort((a, b) => a.priority - b.priority);
+  }
+
+  /**
+   * 记录事件历史
+   */
+  private recordEventHistory<T>(event: string, payload?: T): void {
+    if (!this.enableHistory) {
+      return;
+    }
+
+    if (!this.eventHistory.has(event)) {
+      this.eventHistory.set(event, []);
+    }
+
+    const eventList = this.eventHistory.get(event)!;
+    eventList.push({
+      event,
+      payload,
+      timestamp: Date.now()
+    });
+
+    // 限制历史记录长度
+    if (eventList.length > this.maxHistoryLength) {
+      eventList.shift();
+    }
   }
 }

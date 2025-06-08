@@ -458,12 +458,13 @@ export abstract class BaseModule implements ModuleInterface {
    * @param moduleId - 模块ID
    * @returns 模块实例
    */
-  protected getModule<T extends ModuleInterface>(moduleId: string): T {
+  protected getModule<T>(moduleId: string): T {
     if (!this._kernel) {
       throw new Error(`模块 ${this.metadata.id} 没有关联内核实例，无法获取其他模块`);
     }
 
-    return this._kernel.getModule<T>(moduleId);
+    // 使用双重断言解决类型约束问题
+    return this._kernel.getModule(moduleId) as unknown as T;
   }
 
   /**
@@ -472,13 +473,14 @@ export abstract class BaseModule implements ModuleInterface {
    * @param moduleId - 模块ID
    * @returns 模块实例或undefined
    */
-  protected getOptionalModule<T extends ModuleInterface>(moduleId: string): T | undefined {
+  protected getOptionalModule<T>(moduleId: string): T | undefined {
     if (!this._kernel) {
       return undefined;
     }
 
     try {
-      return this._kernel.getModule<T>(moduleId);
+      // 使用双重断言解决类型约束问题
+      return this._kernel.getModule(moduleId) as unknown as T;
     } catch {
       return undefined;
     }
@@ -551,21 +553,26 @@ export abstract class ModuleBase {
    * 获取模块
    */
   getModule<T = any>(name: string): T {
-    return this.kernel.getModule<T>(name);
+    // 使用双重断言解决类型约束问题
+    return this.kernel.getModule(name) as unknown as T;
   }
 
   /**
    * 注册事件监听器
    */
   on<T = any>(event: string, handler: (data?: T) => void): () => void {
-    this.kernel.on(event, handler);
-    return () => this.kernel.off(event, handler);
+    // 假设内核提供了事件总线或事件方法
+    const eventBus = this.kernel.getEventBus();
+    eventBus.on(event, handler);
+    return () => eventBus.off(event, handler);
   }
 
   /**
    * 触发事件
    */
   emit<T = any>(event: string, data?: T): void {
-    this.kernel.emit(event, data);
+    // 假设内核提供了事件总线或事件方法
+    const eventBus = this.kernel.getEventBus();
+    eventBus.emit(event, data);
   }
 }

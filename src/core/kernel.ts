@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { EventEmitter } from 'events';
+import { EventEmitter } from './event-bus';
 
 /**
  * 内核事件类型
@@ -124,127 +124,308 @@ export interface KernelState {
 }
 
 /**
- * 微内核主类 - FileChunk Pro核心引擎
- * 负责模块注册、生命周期管理和全局状态
+ * 模块接口定义
+ */
+export interface Module {
+  id: string;
+  dependencies?: string[];
+  initialize: () => Promise<void> | void;
+  start?: () => Promise<void> | void;
+  stop?: () => Promise<void> | void;
+  destroy?: () => Promise<void> | void;
+}
+
+/**
+ * 核心配置接口
+ */
+export interface KernelConfig {
+  [key: string]: any;
+}
+
+/**
+ * 模块状态枚举
+ */
+export enum ModuleState {
+  REGISTERED = 'registered',
+  INITIALIZED = 'initialized',
+  STARTED = 'started',
+  STOPPED = 'stopped',
+  ERROR = 'error'
+}
+
+/**
+ * 微内核主类
+ * 负责模块注册、生命周期管理和依赖解析
  */
 export class FileChunkKernel {
-  // 已注册的模块
-  private modules: Map<string, any>;
-  // 事件处理器
-  private eventHandlers: Map<string, Array<(data?: any) => void>>;
-  // 核心配置
-  private config: Record<string, any>;
-  // 日志工具
-  public logger: Logger;
+  // 模块注册表
+  private modules: Map<string, Module> = new Map();
+
+  // 模块状态表
+  private moduleStates: Map<string, ModuleState> = new Map();
+
+  // 全局配置
+  private config: KernelConfig = {};
+
+  // 事件总线
+  private eventBus: EventEmitter;
 
   /**
-   * 创建微内核实例
+   * 构造函数
    */
-  constructor() {
-    this.modules = new Map();
-    this.eventHandlers = new Map();
-    this.config = {};
-    this.logger = new Logger('FileChunkKernel');
+  constructor(config?: KernelConfig) {
+    this.config = config || {};
+    this.eventBus = new EventEmitter();
+    this.initializeEvents();
+  }
+
+  /**
+   * 初始化内核事件
+   */
+  private initializeEvents(): void {
+    this.eventBus.on('module:error', event => {
+      console.error(`Module ${event.moduleId} error:`, event.error);
+    });
   }
 
   /**
    * 注册模块
-   * @param name 模块名称
-   * @param module 模块实例
-   * @returns 微内核实例(用于链式调用)
    */
-  registerModule(name: string, module: any): FileChunkKernel {
-    if (this.modules.has(name)) {
-      this.logger.warn(`模块"${name}"已存在，将被覆盖`);
+  registerModule(module: Module): boolean {
+    if (this.modules.has(module.id)) {
+      console.warn(`Module ${module.id} is already registered`);
+      return false;
     }
 
-    this.modules.set(name, module);
-
-    // 如果模块有init方法，调用它并传入内核引用
-    if (typeof module.init === 'function') {
-      // 异步初始化，但不等待
-      Promise.resolve().then(() => module.init(this));
-    }
-
-    this.logger.debug(`模块"${name}"已注册`);
-    return this;
+    this.modules.set(module.id, module);
+    this.moduleStates.set(module.id, ModuleState.REGISTERED);
+    this.eventBus.emit('module:registered', { moduleId: module.id });
+    return true;
   }
 
   /**
-   * 获取已注册的模块
-   * @param name 模块名称
-   * @returns 模块实例
+   * 获取模块
    */
-  getModule<T = any>(name: string): T {
-    if (!this.modules.has(name)) {
-      throw new Error(`模块"${name}"未注册`);
-    }
-
-    return this.modules.get(name) as T;
+  getModule<T extends Module>(id: string): T | undefined {
+    return this.modules.get(id) as T | undefined;
   }
 
   /**
-   * 注册事件处理器
-   * @param event 事件名称
-   * @param handler 处理函数
-   * @returns 移除监听器的函数
+   * 初始化模块
    */
-  on<T = any>(event: string, handler: (data?: T) => void): () => void {
-    if (!this.eventHandlers.has(event)) {
-      this.eventHandlers.set(event, []);
+  async initializeModule(moduleId: string): Promise<boolean> {
+    if (!this.modules.has(moduleId)) {
+      console.error(`Module ${moduleId} is not registered`);
+      return false;
     }
 
-    this.eventHandlers.get(event)!.push(handler);
-
-    // 返回移除监听器的函数
-    return () => this.off(event, handler);
-  }
-
-  /**
-   * 移除事件处理器
-   * @param event 事件名称
-   * @param handler 处理函数
-   */
-  off(event: string, handler: (data?: any) => void): void {
-    if (!this.eventHandlers.has(event)) return;
-
-    const handlers = this.eventHandlers.get(event)!;
-    const index = handlers.indexOf(handler);
-
-    if (index !== -1) {
-      handlers.splice(index, 1);
+    if (this.moduleStates.get(moduleId) !== ModuleState.REGISTERED) {
+      return true; // 已经初始化
     }
-  }
 
-  /**
-   * 触发事件
-   * @param event 事件名称
-   * @param data 事件数据
-   * @returns 微内核实例(用于链式调用)
-   */
-  emit<T = any>(event: string, data?: T): FileChunkKernel {
-    if (this.eventHandlers.has(event)) {
-      const handlers = this.eventHandlers.get(event)!;
+    const module = this.modules.get(moduleId)!;
 
-      for (const handler of handlers) {
-        try {
-          handler(data);
-        } catch (error) {
-          this.logger.error(`事件"${event}"处理器执行出错:`, error);
+    // 检查依赖并初始化
+    if (module.dependencies && module.dependencies.length > 0) {
+      for (const depId of module.dependencies) {
+        if (!this.modules.has(depId)) {
+          console.error(`Module ${moduleId} depends on ${depId}, but it's not registered`);
+          this.moduleStates.set(moduleId, ModuleState.ERROR);
+          this.eventBus.emit('module:error', {
+            moduleId,
+            error: new Error(`Missing dependency: ${depId}`)
+          });
+          return false;
+        }
+
+        // 初始化依赖模块
+        const success = await this.initializeModule(depId);
+        if (!success) {
+          this.moduleStates.set(moduleId, ModuleState.ERROR);
+          this.eventBus.emit('module:error', {
+            moduleId,
+            error: new Error(`Failed to initialize dependency: ${depId}`)
+          });
+          return false;
         }
       }
     }
 
-    return this;
+    // 初始化模块
+    try {
+      this.eventBus.emit('module:beforeInitialize', { moduleId });
+      await Promise.resolve(module.initialize());
+      this.moduleStates.set(moduleId, ModuleState.INITIALIZED);
+      this.eventBus.emit('module:initialized', { moduleId });
+      return true;
+    } catch (error) {
+      this.moduleStates.set(moduleId, ModuleState.ERROR);
+      this.eventBus.emit('module:error', { moduleId, error });
+      return false;
+    }
+  }
+
+  /**
+   * 启动模块
+   */
+  async startModule(moduleId: string): Promise<boolean> {
+    if (!this.modules.has(moduleId)) {
+      console.error(`Module ${moduleId} is not registered`);
+      return false;
+    }
+
+    const state = this.moduleStates.get(moduleId);
+    if (state === ModuleState.STARTED) {
+      return true; // 已经启动
+    }
+
+    if (state !== ModuleState.INITIALIZED) {
+      // 尝试先初始化模块
+      const initialized = await this.initializeModule(moduleId);
+      if (!initialized) {
+        return false;
+      }
+    }
+
+    const module = this.modules.get(moduleId)!;
+
+    // 启动模块
+    try {
+      this.eventBus.emit('module:beforeStart', { moduleId });
+
+      if (module.start) {
+        await Promise.resolve(module.start());
+      }
+
+      this.moduleStates.set(moduleId, ModuleState.STARTED);
+      this.eventBus.emit('module:started', { moduleId });
+      return true;
+    } catch (error) {
+      this.moduleStates.set(moduleId, ModuleState.ERROR);
+      this.eventBus.emit('module:error', { moduleId, error });
+      return false;
+    }
+  }
+
+  /**
+   * 停止模块
+   */
+  async stopModule(moduleId: string): Promise<boolean> {
+    if (!this.modules.has(moduleId)) {
+      console.error(`Module ${moduleId} is not registered`);
+      return false;
+    }
+
+    const state = this.moduleStates.get(moduleId);
+    if (state !== ModuleState.STARTED) {
+      return true; // 已经停止或从未启动
+    }
+
+    const module = this.modules.get(moduleId)!;
+
+    // 检查是否有其他运行中的模块依赖该模块
+    for (const [id, mod] of this.modules.entries()) {
+      if (
+        id !== moduleId &&
+        this.moduleStates.get(id) === ModuleState.STARTED &&
+        mod.dependencies?.includes(moduleId)
+      ) {
+        console.error(`Cannot stop module ${moduleId}: it's a dependency of running module ${id}`);
+        return false;
+      }
+    }
+
+    // 停止模块
+    try {
+      this.eventBus.emit('module:beforeStop', { moduleId });
+
+      if (module.stop) {
+        await Promise.resolve(module.stop());
+      }
+
+      this.moduleStates.set(moduleId, ModuleState.STOPPED);
+      this.eventBus.emit('module:stopped', { moduleId });
+      return true;
+    } catch (error) {
+      this.moduleStates.set(moduleId, ModuleState.ERROR);
+      this.eventBus.emit('module:error', { moduleId, error });
+      return false;
+    }
+  }
+
+  /**
+   * 销毁模块
+   */
+  async destroyModule(moduleId: string): Promise<boolean> {
+    if (!this.modules.has(moduleId)) {
+      console.error(`Module ${moduleId} is not registered`);
+      return false;
+    }
+
+    // 检查是否有其他模块依赖该模块
+    for (const [id, mod] of this.modules.entries()) {
+      if (id !== moduleId && mod.dependencies?.includes(moduleId)) {
+        console.error(`Cannot destroy module ${moduleId}: it's a dependency of module ${id}`);
+        return false;
+      }
+    }
+
+    const module = this.modules.get(moduleId)!;
+    const state = this.moduleStates.get(moduleId);
+
+    // 如果模块在运行，先停止它
+    if (state === ModuleState.STARTED) {
+      const stopped = await this.stopModule(moduleId);
+      if (!stopped) {
+        return false;
+      }
+    }
+
+    // 销毁模块
+    try {
+      this.eventBus.emit('module:beforeDestroy', { moduleId });
+
+      if (module.destroy) {
+        await Promise.resolve(module.destroy());
+      }
+
+      this.modules.delete(moduleId);
+      this.moduleStates.delete(moduleId);
+      this.eventBus.emit('module:destroyed', { moduleId });
+      return true;
+    } catch (error) {
+      this.moduleStates.set(moduleId, ModuleState.ERROR);
+      this.eventBus.emit('module:error', { moduleId, error });
+      return false;
+    }
+  }
+
+  /**
+   * 获取模块状态
+   */
+  getModuleState(moduleId: string): ModuleState | undefined {
+    return this.moduleStates.get(moduleId);
+  }
+
+  /**
+   * 获取所有已注册模块
+   */
+  getModuleIds(): string[] {
+    return Array.from(this.modules.keys());
+  }
+
+  /**
+   * 获取事件总线
+   */
+  getEventBus(): EventEmitter {
+    return this.eventBus;
   }
 
   /**
    * 设置配置项
-   * @param path 配置路径
-   * @param value 配置值
-   * @returns 微内核实例(用于链式调用)
    */
-  setConfig(path: string, value: any): FileChunkKernel {
+  setConfig(path: string, value: any): void {
+    // 支持点表示法路径设置配置
     const parts = path.split('.');
     let current = this.config;
 
@@ -257,16 +438,18 @@ export class FileChunkKernel {
     }
 
     current[parts[parts.length - 1]] = value;
-    return this;
+    this.eventBus.emit('config:updated', { path, value });
   }
 
   /**
    * 获取配置项
-   * @param path 配置路径
-   * @param defaultValue 默认值
-   * @returns 配置值
    */
-  getConfig<T = any>(path: string, defaultValue?: T): T {
+  getConfig<T = any>(path?: string, defaultValue?: T): T {
+    if (!path) {
+      return this.config as unknown as T;
+    }
+
+    // 支持点表示法路径获取配置
     const parts = path.split('.');
     let current: any = this.config;
 
@@ -281,60 +464,173 @@ export class FileChunkKernel {
   }
 
   /**
-   * 启动所有模块
+   * 批量更新配置
    */
-  async start(): Promise<void> {
-    this.logger.info('正在启动所有模块...');
+  updateConfig(config: KernelConfig): void {
+    this.config = this.deepMerge(this.config, config);
+    this.eventBus.emit('config:batch:updated', { config });
+  }
 
-    // 触发启动前事件
-    this.emit('beforeStart');
+  /**
+   * 深度合并对象
+   */
+  private deepMerge(target: any, source: any): any {
+    const output = { ...target };
 
-    // 启动所有模块
-    for (const [name, module] of this.modules.entries()) {
-      if (typeof module.start === 'function') {
-        try {
-          this.logger.debug(`正在启动模块"${name}"...`);
-          await module.start();
-          this.logger.debug(`模块"${name}"已启动`);
-        } catch (error) {
-          this.logger.error(`模块"${name}"启动失败:`, error);
-          throw error;
+    if (this.isObject(target) && this.isObject(source)) {
+      Object.keys(source).forEach(key => {
+        if (this.isObject(source[key])) {
+          if (!(key in target)) {
+            output[key] = source[key];
+          } else {
+            output[key] = this.deepMerge(target[key], source[key]);
+          }
+        } else {
+          output[key] = source[key];
         }
+      });
+    }
+
+    return output;
+  }
+
+  /**
+   * 判断是否为对象
+   */
+  private isObject(item: any): boolean {
+    return item && typeof item === 'object' && !Array.isArray(item);
+  }
+
+  /**
+   * 初始化所有模块
+   */
+  async initializeAll(): Promise<boolean> {
+    let success = true;
+
+    // 获取模块依赖图的拓扑排序
+    const sortedModules = this.topologicalSort();
+
+    for (const moduleId of sortedModules) {
+      const result = await this.initializeModule(moduleId);
+      if (!result) {
+        success = false;
       }
     }
 
-    // 触发启动完成事件
-    this.emit('afterStart');
+    return success;
+  }
 
-    this.logger.info('所有模块已启动');
+  /**
+   * 启动所有模块
+   */
+  async startAll(): Promise<boolean> {
+    let success = true;
+
+    // 获取模块依赖图的拓扑排序
+    const sortedModules = this.topologicalSort();
+
+    for (const moduleId of sortedModules) {
+      const result = await this.startModule(moduleId);
+      if (!result) {
+        success = false;
+      }
+    }
+
+    return success;
   }
 
   /**
    * 停止所有模块
    */
-  async stop(): Promise<void> {
-    this.logger.info('正在停止所有模块...');
+  async stopAll(): Promise<boolean> {
+    let success = true;
 
-    // 触发停止前事件
-    this.emit('beforeStop');
+    // 以依赖的逆序停止模块
+    const sortedModules = this.topologicalSort().reverse();
 
-    // 停止所有模块
-    for (const [name, module] of this.modules.entries()) {
-      if (typeof module.stop === 'function') {
-        try {
-          this.logger.debug(`正在停止模块"${name}"...`);
-          await module.stop();
-          this.logger.debug(`模块"${name}"已停止`);
-        } catch (error) {
-          this.logger.error(`模块"${name}"停止失败:`, error);
+    for (const moduleId of sortedModules) {
+      const result = await this.stopModule(moduleId);
+      if (!result) {
+        success = false;
+      }
+    }
+
+    return success;
+  }
+
+  /**
+   * 销毁所有模块
+   */
+  async destroyAll(): Promise<boolean> {
+    let success = true;
+
+    // 以依赖的逆序销毁模块
+    const sortedModules = this.topologicalSort().reverse();
+
+    for (const moduleId of sortedModules) {
+      const result = await this.destroyModule(moduleId);
+      if (!result) {
+        success = false;
+      }
+    }
+
+    return success;
+  }
+
+  /**
+   * 模块拓扑排序（处理依赖关系）
+   */
+  private topologicalSort(): string[] {
+    const result: string[] = [];
+    const visited = new Set<string>();
+    const temp = new Set<string>();
+
+    // 深度优先搜索函数
+    const dfs = (moduleId: string): boolean => {
+      if (temp.has(moduleId)) {
+        // 检测到循环依赖
+        console.error(`Circular dependency detected: ${moduleId}`);
+        return false;
+      }
+
+      if (visited.has(moduleId)) {
+        return true;
+      }
+
+      temp.add(moduleId);
+
+      const module = this.modules.get(moduleId);
+      if (module && module.dependencies) {
+        for (const depId of module.dependencies) {
+          if (!this.modules.has(depId)) {
+            console.error(
+              `Missing dependency: ${moduleId} depends on ${depId}, but it's not registered`
+            );
+            return false;
+          }
+
+          if (!dfs(depId)) {
+            return false;
+          }
+        }
+      }
+
+      temp.delete(moduleId);
+      visited.add(moduleId);
+      result.push(moduleId);
+      return true;
+    };
+
+    // 遍历所有模块
+    for (const moduleId of this.modules.keys()) {
+      if (!visited.has(moduleId)) {
+        if (!dfs(moduleId)) {
+          throw new Error('Cannot sort modules due to circular dependency');
         }
       }
     }
 
-    // 触发停止完成事件
-    this.emit('afterStop');
-
-    this.logger.info('所有模块已停止');
+    return result;
   }
 }
 

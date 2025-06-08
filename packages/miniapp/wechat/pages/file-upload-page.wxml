@@ -1,0 +1,68 @@
+<!-- 文件上传页面模板 -->
+<view class="upload-container">
+  <view class="header">
+    <text class="title">文件上传</text>
+    <view class="actions">
+      <view class="action-btn options-btn" bindtap="toggleOptions">
+        <text class="iconfont icon-setting"></text>
+      </view>
+    </view>
+  </view>
+  
+  <view class="upload-panel">
+    <view class="buttons-row">
+      <button class="btn btn-primary" bindtap="chooseFile">选择文件</button>
+      <button class="btn btn-success" bindtap="startUpload" wx:if="{{!uploading}}">开始上传</button>
+      <button class="btn btn-warning" bindtap="pauseUpload" wx:if="{{uploading}}">暂停上传</button>
+      <button class="btn btn-danger" bindtap="cancelUpload">取消上传</button>
+    </view>
+    
+    <view class="options-panel" wx:if="{{showOptions}}">
+      <view class="option-item">
+        <text class="option-label">分片大小:</text>
+        <text class="option-value">2 MB</text>
+      </view>
+      <view class="option-item">
+        <text class="option-label">并发数量:</text>
+        <text class="option-value">3</text>
+      </view>
+    </view>
+  </view>
+  
+  <!-- 文件列表 -->
+  <view class="file-list">
+    <block wx:if="{{files.length > 0}}">
+      <view class="file-item" wx:for="{{files}}" wx:key="id">
+        <view class="file-info">
+          <view class="file-name">{{item.name}}</view>
+          <view class="file-meta">
+            <text class="file-size">{{item.size / 1024 | 0}} KB</text>
+            <text class="file-status {{item.status}}">{{item.status}}</text>
+          </view>
+        </view>
+        
+        <view class="progress-bar">
+          <view class="progress-inner" style="width: {{item.progress * 100}}%"></view>
+        </view>
+        
+        <view class="file-actions">
+          <view class="file-action" wx:if="{{item.status === 'success' && item.url}}" 
+                bindtap="previewFile" data-file-id="{{item.id}}">
+            <text class="iconfont icon-preview"></text>
+          </view>
+          <view class="file-action" wx:if="{{item.status === 'success' && item.url}}" 
+                bindtap="shareFile" data-file-id="{{item.id}}">
+            <text class="iconfont icon-share"></text>
+          </view>
+          <view class="file-action delete" bindtap="deleteFile" data-file-id="{{item.id}}">
+            <text class="iconfont icon-delete"></text>
+          </view>
+        </view>
+      </view>
+    </block>
+    
+    <view class="empty-tip" wx:else>
+      <text>请选择文件开始上传</text>
+    </view>
+  </view>
+</view> 

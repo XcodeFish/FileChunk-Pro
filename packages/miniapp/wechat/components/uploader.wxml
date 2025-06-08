@@ -1,0 +1,69 @@
+<!-- 上传组件模板 -->
+<view class="file-uploader">
+  <!-- 上传按钮 -->
+  <view class="upload-button {{disabled ? 'disabled' : ''}}" bindtap="chooseFile">
+    <view class="upload-icon">+</view>
+    <view class="upload-text">{{uploadText}}</view>
+  </view>
+
+  <!-- 文件列表 -->
+  <view class="file-list" wx:if="{{showFileList && fileList.length > 0}}">
+    <view class="file-item" wx:for="{{fileList}}" wx:key="uid" bindtap="onFileItemClick" data-uid="{{item.uid}}">
+      <!-- 文件图标 -->
+      <view class="file-icon">
+        <image wx:if="{{item.type.indexOf('image') >= 0}}" class="file-thumbnail" src="{{item.path}}" mode="aspectFill">
+        </image>
+        <view wx:else class="file-type-icon">{{item.name.substr(-3)}}</view>
+      </view>
+
+      <!-- 文件信息 -->
+      <view class="file-info">
+        <view class="file-name">{{item.name}}</view>
+        <view class="file-size">{{item.size > 0 ? formatSize(item.size) : '未知大小'}}</view>
+
+        <!-- 上传状态 -->
+        <view class="file-status">
+          <!-- 进度条 -->
+          <view class="progress-bar" wx:if="{{item.status === 'uploading'}}">
+            <view class="progress-inner" style="width: {{item.progress * 100}}%"></view>
+          </view>
+
+          <!-- 状态文本 -->
+          <text class="status-text status-{{item.status}}">
+            {{
+            item.status === 'ready' ? '等待上传' :
+            item.status === 'uploading' ? '上传中 ' + (item.progress * 100).toFixed(0) + '%' :
+            item.status === 'success' ? '上传成功' :
+            item.status === 'fail' ? '上传失败' :
+            item.status === 'pause' ? '已暂停' : ''
+            }}
+          </text>
+        </view>
+      </view>
+
+      <!-- 操作按钮 -->
+      <view class="file-actions">
+        <!-- 删除按钮 -->
+        <view class="action-btn delete-btn" catchtap="onDeleteClick" data-uid="{{item.uid}}">
+          <view class="action-icon">×</view>
+        </view>
+
+        <!-- 重试按钮 -->
+        <view wx:if="{{item.status === 'fail'}}" class="action-btn retry-btn" catchtap="onRetryClick"
+          data-uid="{{item.uid}}">
+          <view class="action-icon">↻</view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 上传状态信息 -->
+  <view class="upload-status" wx:if="{{fileList.length > 0}}">
+    <text>{{fileList.length}}个文件，{{
+      uploadStatus === 'ready' ? '待上传' :
+      uploadStatus === 'uploading' ? '上传中 ' + totalProgress + '%' :
+      uploadStatus === 'success' ? '上传成功' :
+      uploadStatus === 'fail' ? '上传失败' : ''
+      }}</text>
+  </view>
+</view>
